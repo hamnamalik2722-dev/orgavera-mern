@@ -1,0 +1,23 @@
+<!DOCTYPE html> 
+<html>
+    <title>exam</title>
+    <body>
+        <p id="output"></p>
+        <p><b>ANIMALS:</b></p>
+        <ul>
+            <li>Alishba</li> 
+            <li>Hashir</li>
+        </ul>
+        <p>click the button to display <b>animal</b></p>
+        <button onclick="showlist()">show list</button>
+        <script>
+            function showlist(){
+                var list=document.getElementsByTagName("li");
+                for(let a=0;a<list.length;a++){
+                    document.getElementById("output").innerHTML+=list[a].innerText+"<br>"
+                }
+            }
+        </script>
+
+    </body>
+</html>
