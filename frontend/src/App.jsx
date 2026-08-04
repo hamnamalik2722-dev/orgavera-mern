@@ -1049,7 +1049,7 @@ function App() {
           </section>
 
           <div className="footer-bottom-premium">
-            <span>© 2026 ORGAVERA. All Rights Reserved.</span>
+            <span>© 2026 ORGAVERA. All Rights Reserved.fagzv</span>
 
             <span>BOTANICAL BEAUTY · THOUGHTFULLY MADE</span>
             <span>RAWALPINDI · PAKISTAN</span>
