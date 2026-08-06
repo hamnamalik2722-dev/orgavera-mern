@@ -107,11 +107,27 @@ const hairCareProducts = [
 ];
 
 function Home() {
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    try {
+      const savedCart = localStorage.getItem("orgaveraCart");
+      return savedCart ? JSON.parse(savedCart) : [];
+    } catch (error) {
+      console.error("Could not load saved cart:", error);
+      return [];
+    }
+  });
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
   const [checkoutStep, setCheckoutStep] = useState(1);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("orgaveraCart", JSON.stringify(cart));
+    } catch (error) {
+      console.error("Could not save cart:", error);
+    }
+  }, [cart]);
 
   const getNumericPrice = (price) => Number(String(price).replace(/[^0-9]/g, "")) || 0;
 
@@ -1097,3 +1113,4 @@ function App() {
 }
 
 export default App;
+
