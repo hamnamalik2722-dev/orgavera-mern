@@ -107,27 +107,56 @@ const hairCareProducts = [
 ];
 
 function Home() {
-  const [cart, setCart] = useState(() => {
+  const CART_STORAGE_KEY = "orgaveraCart";
+
+  const readSavedCart = () => {
     try {
-      const savedCart = localStorage.getItem("orgaveraCart");
-      return savedCart ? JSON.parse(savedCart) : [];
+      const savedCart = window.localStorage.getItem(CART_STORAGE_KEY);
+      const parsedCart = savedCart ? JSON.parse(savedCart) : [];
+      return Array.isArray(parsedCart) ? parsedCart : [];
     } catch (error) {
       console.error("Could not load saved cart:", error);
       return [];
     }
-  });
+  };
+
+  const [cart, setCart] = useState(readSavedCart);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
   const [checkoutStep, setCheckoutStep] = useState(1);
 
+  const updateCart = (updater) => {
+    updateCart((currentCart) => {
+      const nextCart =
+        typeof updater === "function" ? updater(currentCart) : updater;
+
+      try {
+        window.localStorage.setItem(
+          CART_STORAGE_KEY,
+          JSON.stringify(nextCart)
+        );
+      } catch (error) {
+        console.error("Could not save cart:", error);
+      }
+
+      return nextCart;
+    });
+  };
+
   useEffect(() => {
-    try {
-      localStorage.setItem("orgaveraCart", JSON.stringify(cart));
-    } catch (error) {
-      console.error("Could not save cart:", error);
-    }
-  }, [cart]);
+    const syncCartFromStorage = () => {
+      setCart(readSavedCart());
+    };
+
+    window.addEventListener("pageshow", syncCartFromStorage);
+    window.addEventListener("storage", syncCartFromStorage);
+
+    return () => {
+      window.removeEventListener("pageshow", syncCartFromStorage);
+      window.removeEventListener("storage", syncCartFromStorage);
+    };
+  }, []);
 
   const getNumericPrice = (price) => Number(String(price).replace(/[^0-9]/g, "")) || 0;
 
@@ -148,7 +177,7 @@ function Home() {
   };
 
   const updateQuantity = (id, change) => {
-    setCart((currentCart) =>
+    updateCart((currentCart) =>
       currentCart
         .map((item) =>
           item.id === id ? { ...item, quantity: Math.max(0, item.quantity + change) } : item
@@ -158,7 +187,9 @@ function Home() {
   };
 
   const removeFromCart = (id) => {
-    setCart((currentCart) => currentCart.filter((item) => item.id !== id));
+    updateCart((currentCart) =>
+      currentCart.filter((item) => item.id !== id)
+    );
   };
 
   const cartCount = useMemo(
@@ -1113,4 +1144,3 @@ function App() {
 }
 
 export default App;
-
