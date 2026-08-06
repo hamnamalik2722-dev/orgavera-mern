@@ -1,0 +1,315 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=Manrope:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&display=swap");
+
+.signup-page {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(460px, 0.95fr);
+    overflow: hidden;
+    color: #f4ecd9;
+    background: #010201;
+    font-family: "Manrope", sans-serif;
+}
+
+.signup-page * {
+    box-sizing: border-box;
+}
+
+.signup-showcase {
+    min-height: 100vh;
+    position: relative;
+    isolation: isolate;
+    padding: 42px clamp(34px, 5vw, 78px) 54px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: url("/orgavera -hero.png.png") center / cover no-repeat;
+}
+
+.signup-showcase-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+        linear-gradient(90deg, rgba(1, 2, 1, 0.92), rgba(1, 2, 1, 0.46)),
+        linear-gradient(180deg, rgba(1, 2, 1, 0.18), rgba(1, 2, 1, 0.55));
+}
+
+.signup-showcase-brand {
+    width: fit-content;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.signup-showcase-brand img {
+    width: 68px;
+    height: 68px;
+    object-fit: contain;
+}
+
+.signup-showcase-brand div {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.signup-showcase-brand strong {
+    color: #cba64f;
+    font-family: "Playfair Display", serif;
+    font-size: 25px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+}
+
+.signup-showcase-brand span {
+    color: rgba(244, 236, 217, 0.58);
+    font-family: "DM Mono", monospace;
+    font-size: 7px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+}
+
+.signup-showcase-copy {
+    max-width: 690px;
+}
+
+.signup-showcase-copy>p {
+    margin: 0 0 21px;
+    color: #f0d47a;
+    font-family: "DM Mono", monospace;
+    font-size: 8px;
+    letter-spacing: 0.34em;
+}
+
+.signup-showcase-copy h1 {
+    margin: 0;
+    color: #ffffff;
+    font-family: "Playfair Display", serif;
+    font-size: clamp(58px, 6vw, 96px);
+    font-weight: 500;
+    line-height: 0.9;
+    letter-spacing: -0.05em;
+}
+
+.signup-showcase-copy h1 em {
+    display: block;
+    color: #cba64f;
+    font-weight: 500;
+}
+
+.signup-showcase-copy>span {
+    max-width: 570px;
+    margin-top: 28px;
+    display: block;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 13px;
+    line-height: 1.9;
+}
+
+.signup-showcase-points {
+    padding-top: 22px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    border-top: 1px solid rgba(203, 166, 79, 0.28);
+}
+
+.signup-showcase-points span {
+    color: rgba(244, 236, 217, 0.65);
+    font-family: "DM Mono", monospace;
+    font-size: 7px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+}
+
+.signup-panel {
+    min-height: 100vh;
+    position: relative;
+    padding: 88px clamp(34px, 5vw, 80px) 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(circle at 15% 12%, rgba(203, 166, 79, 0.09), transparent 28%),
+        linear-gradient(160deg, #0a0b09, #020302);
+    border-left: 1px solid rgba(203, 166, 79, 0.22);
+}
+
+.signup-back-link {
+    position: absolute;
+    top: 32px;
+    left: 38px;
+    display: inline-flex;
+    gap: 10px;
+    color: rgba(244, 236, 217, 0.62);
+    text-decoration: none;
+    font-family: "DM Mono", monospace;
+    font-size: 8px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.signup-card {
+    width: min(100%, 510px);
+    padding: 39px 40px 34px;
+    background: linear-gradient(145deg, rgba(22, 24, 19, 0.97), rgba(5, 7, 5, 0.99));
+    border: 1px solid rgba(203, 166, 79, 0.4);
+    box-shadow: 0 30px 75px rgba(0, 0, 0, 0.45);
+}
+
+.signup-kicker {
+    margin: 0 0 13px;
+    color: #cba64f;
+    font-family: "DM Mono", monospace;
+    font-size: 8px;
+    letter-spacing: 0.25em;
+}
+
+.signup-card h2 {
+    margin: 0;
+    color: #ffffff;
+    font-family: "Playfair Display", serif;
+    font-size: clamp(42px, 4vw, 58px);
+    font-weight: 500;
+    line-height: 1;
+}
+
+.signup-subtitle {
+    margin: 14px 0 27px;
+    color: rgba(244, 236, 217, 0.56);
+    font-size: 12.5px;
+    line-height: 1.7;
+}
+
+.signup-form {
+    display: grid;
+    gap: 15px;
+}
+
+.signup-form label {
+    display: grid;
+    gap: 8px;
+}
+
+.signup-form label>span {
+    color: rgba(244, 236, 217, 0.78);
+    font-size: 10.5px;
+    font-weight: 600;
+}
+
+.signup-form input {
+    width: 100%;
+    min-height: 52px;
+    padding: 0 15px;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(203, 166, 79, 0.22);
+    outline: none;
+    font: inherit;
+    font-size: 12px;
+}
+
+.signup-form input:focus {
+    border-color: rgba(240, 212, 122, 0.72);
+    box-shadow: 0 0 0 3px rgba(203, 166, 79, 0.08);
+}
+
+.signup-password-wrap {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(203, 166, 79, 0.22);
+}
+
+.signup-password-wrap input {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+.signup-password-wrap button {
+    margin-right: 13px;
+    color: #cba64f;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: "DM Mono", monospace;
+    font-size: 7px;
+    text-transform: uppercase;
+}
+
+.signup-form>button {
+    min-height: 56px;
+    margin-top: 7px;
+    padding: 0 18px 0 21px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #080906;
+    background: linear-gradient(145deg, #f0d47a, #c79a38);
+    border: 1px solid rgba(255, 239, 190, 0.66);
+    cursor: pointer;
+    font: inherit;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.signup-message {
+    margin: 17px 0 0;
+    padding: 12px 13px;
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.signup-message.success {
+    color: #a8ddb1;
+    background: rgba(48, 117, 64, 0.15);
+}
+
+.signup-message.error {
+    color: #f0aaa0;
+    background: rgba(153, 57, 44, 0.14);
+}
+
+.signup-login-link {
+    margin-top: 22px;
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+    color: rgba(244, 236, 217, 0.45);
+    font-size: 10.5px;
+}
+
+.signup-login-link a {
+    color: #d5ad4e;
+    text-decoration: none;
+}
+
+@media (max-width: 980px) {
+    .signup-page {
+        grid-template-columns: 1fr;
+    }
+
+    .signup-showcase {
+        display: none;
+    }
+
+    .signup-panel {
+        padding: 88px 22px 42px;
+        border-left: none;
+    }
+}
+
+@media (max-width: 560px) {
+    .signup-card {
+        padding: 30px 21px 27px;
+    }
+
+    .signup-card h2 {
+        font-size: 42px;
+    }
+}

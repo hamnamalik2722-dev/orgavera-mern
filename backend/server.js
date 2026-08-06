@@ -1,33 +1,27 @@
-const productRoutes = require("./routes/productRoutes");
-const orderRoutes = require("./routes/orderRoutes");
 const express = require("express");
 const mongoose = require("mongoose");
-const dns = require("node:dns");
+const cors = require("cors");
 require("dotenv").config();
-
+const authRoutes = require("./routes/authRoutes");
 const app = express();
 
-// Node.js ko public DNS servers use karwa rahe hain
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
-
+app.use(cors());
 app.use(express.json());
-app.use("/api/products", productRoutes);
-app.use("/api/orders", orderRoutes);
+app.use("/api/auth", authRoutes);
+mongoose
+    .connect(process.env.MONGO_URI)
+    .then(() => {
+        console.log("MongoDB Connected");
+    })
+    .catch((err) => {
+        console.log(err);
+    });
 app.get("/", (req, res) => {
-    res.send("Welcome to ORGAVERA Backend");
+    res.send("Orgavera backend is running");
 });
 
 const PORT = process.env.PORT || 5000;
 
-mongoose
-    .connect(process.env.MONGO_URI)
-    .then(() => {
-        console.log("Database Connected");
-
-        app.listen(PORT, () => {
-            console.log(`Server Started on http://localhost:${PORT}`);
-        });
-    })
-    .catch((error) => {
-        console.error("Database Connection Error:", error.message);
-    });
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});

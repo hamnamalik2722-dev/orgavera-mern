@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { Routes, Route, Navigate, Link } from "react-router-dom";
+import Login from "./Login.jsx";
+import Signup from "./Signup.jsx";
 
 const products = [
   {
@@ -103,7 +106,7 @@ const hairCareProducts = [
   },
 ];
 
-function App() {
+function Home() {
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -217,10 +220,32 @@ function App() {
           <a href="#contact">Contact</a>
         </nav>
 
-        <button type="button" className="navbar-button cart-nav-button" onClick={() => setIsCartOpen(true)}>
-          Cart
-          <span className="cart-count">{cartCount}</span>
-        </button>
+        <div className="navbar-actions">
+          <Link
+            to="/login"
+            className="navbar-button login-nav-button"
+            aria-label="Login to your ORGAVERA account"
+          >
+            <span className="login-nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="img">
+                <circle cx="12" cy="8" r="4"></circle>
+                <path d="M4.5 21c.7-4.4 3.2-6.8 7.5-6.8s6.8 2.4 7.5 6.8"></path>
+              </svg>
+            </span>
+
+            <span className="login-nav-copy">
+              <small>MY ACCOUNT</small>
+              <strong>LOGIN</strong>
+            </span>
+
+            <span className="login-nav-arrow" aria-hidden="true">↗</span>
+          </Link>
+
+          <button type="button" className="navbar-button cart-nav-button" onClick={() => setIsCartOpen(true)}>
+            Cart
+            <span className="cart-count">{cartCount}</span>
+          </button>
+        </div>
       </header>
 
       <main>
@@ -1057,6 +1082,17 @@ function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
