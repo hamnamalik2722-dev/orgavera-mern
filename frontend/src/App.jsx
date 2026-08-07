@@ -1,8 +1,12 @@
+
+
+
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { Routes, Route, Navigate, Link } from "react-router-dom";
 import Login from "./Login.jsx";
 import Signup from "./Signup.jsx";
+import Admin from "./Admin.jsx";
 
 const products = [
   {
@@ -106,6 +110,124 @@ const hairCareProducts = [
   },
 ];
 
+const defaultAdminCatalog = {
+  skincare: skinCareProducts.map((item) => ({ ...item, description: item.description || "" })),
+  haircare: hairCareProducts.map((item) => ({ ...item, description: item.description || "" })),
+  soaps: [
+    {
+      id: "soap-1",
+      name: "Loofah Honey Soap",
+      type: "Handcrafted Soap",
+      price: "Rs. 450",
+      image: "/soap-loofah-honey.png",
+      description: "A handcrafted botanical cleansing bar for an everyday body-care ritual.",
+    },
+    {
+      id: "soap-2",
+      name: "Turmeric Soap",
+      type: "Botanical Soap",
+      price: "Rs. 400",
+      image: "/soap-turmeric.png",
+      description: "A small-batch botanical cleansing bar with a simple herbal profile.",
+    },
+    {
+      id: "soap-3",
+      name: "Neem Soap",
+      type: "Herbal Soap",
+      price: "Rs. 400",
+      image: "/soap-neem.png",
+      description: "A herbal cleansing bar inspired by traditional botanical care.",
+    },
+  ],
+  ingredients: [
+    {
+      id: "ingredient-1",
+      name: "Niacinamide",
+      type: "Skincare Active",
+      price: "Ask for price",
+      image: "/niacinamide.png",
+      description: "A cosmetic-grade active for selected skincare formulations.",
+    },
+    {
+      id: "ingredient-2",
+      name: "Alpha Arbutin",
+      type: "Skincare Active",
+      price: "Ask for price",
+      image: "/alpha-arbutin.png",
+      description: "A formulation ingredient for selected skincare products.",
+    },
+    {
+      id: "ingredient-3",
+      name: "Stearic Acid",
+      type: "Texture & Structure",
+      price: "Ask for price",
+      image: "/stearic-acid.png",
+      description: "A formulation essential used where suitable for structure and texture.",
+    },
+  ],
+  classes: [
+    {
+      id: "class-1",
+      name: "Herbal Skincare Formulation",
+      type: "Hands-on Class",
+      price: "Book a seat",
+      image: "/skincare-class.png",
+      description: "A practical guided session covering the basics of skincare formulation.",
+    },
+    {
+      id: "class-2",
+      name: "Haircare Formulation Workshop",
+      type: "Practical Workshop",
+      price: "Book a seat",
+      image: "/haircare-class.png",
+      description: "A hands-on learning session focused on practical haircare formulation.",
+    },
+    {
+      id: "class-3",
+      name: "Artisan Soap Making Class",
+      type: "Hands-on Class",
+      price: "Book a seat",
+      image: "/soap-class.png",
+      description: "Learn the basic process and workflow behind handcrafted soap making.",
+    },
+  ],
+};
+
+
+const normalizePublicImagePath = (value) => {
+  const image = String(value || "").trim().replace(/\\/g, "/");
+
+  if (!image) return "/orgavera-logo.png";
+  if (/^(https?:|data:|blob:)/i.test(image)) return image;
+
+  // Images stored in Vite's public folder must be referenced from the site root.
+  // This also repairs older admin entries such as "soap.jpg" when opened on
+  // nested routes like /collection/soaps.
+  return image.startsWith("/") ? image : `/${image.replace(/^\.\//, "")}`;
+};
+
+const categoryPageConfig = {
+  soaps: {
+    number: "03",
+    eyebrow: "HANDCRAFTED CLEANSING",
+    title: "Artisan Soaps",
+    storageKey: "soaps",
+  },
+  ingredients: {
+    number: "04",
+    eyebrow: "FORMULATION ESSENTIALS",
+    title: "Cosmetic Ingredients",
+    storageKey: "ingredients",
+  },
+  classes: {
+    number: "05",
+    eyebrow: "LEARN WITH ORGAVERA",
+    title: "Book a Class",
+    storageKey: "classes",
+  },
+};
+
+
 function Home() {
   const CART_STORAGE_KEY = "orgaveraCart";
 
@@ -126,8 +248,31 @@ function Home() {
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
   const [checkoutStep, setCheckoutStep] = useState(1);
 
+  // Keep the homepage category product sections in sync with the Admin Panel.
+  const readAdminCatalog = () => {
+    try {
+      const saved = window.localStorage.getItem("orgaveraAdminCatalog");
+      if (!saved) return defaultAdminCatalog;
+      const parsed = JSON.parse(saved);
+      return {
+        skincare: Array.isArray(parsed.skincare) ? parsed.skincare : defaultAdminCatalog.skincare,
+        haircare: Array.isArray(parsed.haircare) ? parsed.haircare : defaultAdminCatalog.haircare,
+        soaps: Array.isArray(parsed.soaps) ? parsed.soaps : defaultAdminCatalog.soaps,
+        ingredients: Array.isArray(parsed.ingredients)
+          ? parsed.ingredients
+          : defaultAdminCatalog.ingredients,
+        classes: Array.isArray(parsed.classes) ? parsed.classes : defaultAdminCatalog.classes,
+      };
+    } catch (error) {
+      console.error("Could not load admin catalog:", error);
+      return defaultAdminCatalog;
+    }
+  };
+
+  const [adminCatalog, setAdminCatalog] = useState(readAdminCatalog);
+
   const updateCart = (updater) => {
-    updateCart((currentCart) => {
+    setCart((currentCart) => {
       const nextCart =
         typeof updater === "function" ? updater(currentCart) : updater;
 
@@ -158,10 +303,23 @@ function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const refreshCatalog = () => setAdminCatalog(readAdminCatalog());
+    window.addEventListener("storage", refreshCatalog);
+    window.addEventListener("orgavera-catalog-updated", refreshCatalog);
+    window.addEventListener("pageshow", refreshCatalog);
+
+    return () => {
+      window.removeEventListener("storage", refreshCatalog);
+      window.removeEventListener("orgavera-catalog-updated", refreshCatalog);
+      window.removeEventListener("pageshow", refreshCatalog);
+    };
+  }, []);
+
   const getNumericPrice = (price) => Number(String(price).replace(/[^0-9]/g, "")) || 0;
 
   const addToCart = (product) => {
-    setCart((currentCart) => {
+    updateCart((currentCart) => {
       const existing = currentCart.find((item) => item.id === product.id);
       if (existing) {
         return currentCart.map((item) =>
@@ -288,6 +446,18 @@ function Home() {
             <span className="login-nav-arrow" aria-hidden="true">↗</span>
           </Link>
 
+          <Link
+            to="/signup"
+            className="navbar-button signup-nav-button"
+            aria-label="Create your ORGAVERA account"
+          >
+            <span className="login-nav-copy">
+              <small>NEW HERE?</small>
+              <strong>SIGN UP</strong>
+            </span>
+            <span className="login-nav-arrow" aria-hidden="true">↗</span>
+          </Link>
+
           <button type="button" className="navbar-button cart-nav-button" onClick={() => setIsCartOpen(true)}>
             Cart
             <span className="cart-count">{cartCount}</span>
@@ -348,6 +518,99 @@ function Home() {
           <div className="scroll-indicator">
             <span></span>
             Scroll to discover
+          </div>
+        </section>
+
+        {/* ================= SHOP BY CATEGORY ================= */}
+
+        <section className="org-category-section" aria-label="Shop by category">
+          <div className="org-category-shell">
+            <div className="org-category-head">
+              <div>
+                <p className="org-category-kicker">SHOP BY CATEGORY</p>
+                <h2>Choose your <em>ORGAVERA ritual.</em></h2>
+              </div>
+              <p className="org-category-intro">
+                Explore our collections and jump straight to the products,
+                ingredients or learning experience you are looking for.
+              </p>
+            </div>
+
+            <div className="org-category-grid">
+              <a href="#hair-care" className="org-category-card">
+                <div className="org-category-icon" aria-hidden="true">
+                  <svg viewBox="0 0 32 32">
+                    <path d="M9 26c7-2 12-8 14-18M12 6c5 2 8 6 8 11M8 12c4 1 7 4 9 8" />
+                  </svg>
+                </div>
+                <div className="org-category-copy">
+                  <span>01 · HAIR RITUALS</span>
+                  <strong>Hair Care</strong>
+                  <small>Oil · Shampoo · Conditioner</small>
+                </div>
+                <b className="org-category-arrow">↗</b>
+              </a>
+
+              <a href="#skin-care" className="org-category-card">
+                <div className="org-category-icon" aria-hidden="true">
+                  <svg viewBox="0 0 32 32">
+                    <circle cx="16" cy="16" r="9" />
+                    <path d="M12 14c2-3 6-3 8 0M13 20c2 2 4 2 6 0" />
+                  </svg>
+                </div>
+                <div className="org-category-copy">
+                  <span>02 · SKIN RITUALS</span>
+                  <strong>Skin Care</strong>
+                  <small>Serums · Masks · Daily Care</small>
+                </div>
+                <b className="org-category-arrow">↗</b>
+              </a>
+
+              <a href="#soaps-products" className="org-category-card">
+                <div className="org-category-icon" aria-hidden="true">
+                  <svg viewBox="0 0 32 32">
+                    <rect x="7" y="10" width="18" height="13" rx="5" />
+                    <path d="M12 8c1-3 7-3 8 0M11 16h10" />
+                  </svg>
+                </div>
+                <div className="org-category-copy">
+                  <span>03 · BOTANICAL CLEANSING</span>
+                  <strong>Artisan Soaps</strong>
+                  <small>Handcrafted · Herbal · Small Batch</small>
+                </div>
+                <b className="org-category-arrow">↗</b>
+              </a>
+
+              <a href="#ingredients-products" className="org-category-card">
+                <div className="org-category-icon" aria-hidden="true">
+                  <svg viewBox="0 0 32 32">
+                    <path d="M12 5v7L7 23c-1 2 1 4 3 4h12c2 0 4-2 3-4l-5-11V5" />
+                    <path d="M11 19h10M10 8h12" />
+                  </svg>
+                </div>
+                <div className="org-category-copy">
+                  <span>04 · FORMULATION ESSENTIALS</span>
+                  <strong>Cosmetic Ingredients</strong>
+                  <small>Actives · Bases · Formulation Supplies</small>
+                </div>
+                <b className="org-category-arrow">↗</b>
+              </a>
+
+              <a href="#classes-products" className="org-category-card org-category-card-featured">
+                <div className="org-category-icon" aria-hidden="true">
+                  <svg viewBox="0 0 32 32">
+                    <path d="M7 8h8c3 0 5 2 5 5v12h-8c-3 0-5-2-5-5V8Z" />
+                    <path d="M25 8h-5v17h5V8ZM11 13h5M11 17h5" />
+                  </svg>
+                </div>
+                <div className="org-category-copy">
+                  <span>05 · LEARN WITH ORGAVERA</span>
+                  <strong>Book a Class</strong>
+                  <small>Hands-on Botanical Formulation Sessions</small>
+                </div>
+                <b className="org-category-arrow">↗</b>
+              </a>
+            </div>
           </div>
         </section>
 
@@ -542,22 +805,22 @@ function Home() {
             </p>
           </div>
 
-          <div className="collection-group reveal">
+          <div className="collection-group reveal" id="skin-care">
             <div className="collection-row-heading">
               <div>
                 <span>01</span>
                 <p>SKIN CARE</p>
               </div>
 
-              <small>7 botanical essentials</small>
+              <small>{adminCatalog.skincare.length} {adminCatalog.skincare.length === 1 ? "product" : "products"}</small>
             </div>
 
             <div className="collection-scroll">
-              {skinCareProducts.map((product) => (
+              {adminCatalog.skincare.map((product) => (
                 <article className="collection-card" key={product.id}>
                   <div className="collection-image-wrap">
                     <img
-                      src={product.image}
+                      src={normalizePublicImagePath(product.image)}
                       alt={`${product.name} by ORGAVERA`}
                       className="collection-image"
                       loading="lazy"
@@ -582,6 +845,11 @@ function Home() {
                   <div className="collection-card-info">
                     <p>{product.type}</p>
                     <h3>{product.name}</h3>
+                    {product.description && (
+                      <p style={{ marginTop: "12px", marginBottom: "14px", textTransform: "none", letterSpacing: 0, lineHeight: 1.6, opacity: 0.72 }}>
+                        {product.description}
+                      </p>
+                    )}
                     <strong>{product.price}</strong>
                   </div>
                 </article>
@@ -589,22 +857,22 @@ function Home() {
             </div>
           </div>
 
-          <div className="collection-group reveal">
+          <div className="collection-group reveal" id="hair-care">
             <div className="collection-row-heading">
               <div>
                 <span>02</span>
                 <p>HAIR CARE</p>
               </div>
 
-              <small>3 herbal essentials</small>
+              <small>{adminCatalog.haircare.length} {adminCatalog.haircare.length === 1 ? "product" : "products"}</small>
             </div>
 
             <div className="collection-scroll collection-scroll-hair">
-              {hairCareProducts.map((product) => (
+              {adminCatalog.haircare.map((product) => (
                 <article className="collection-card" key={product.id}>
                   <div className="collection-image-wrap">
                     <img
-                      src={product.image}
+                      src={normalizePublicImagePath(product.image)}
                       alt={`${product.name} by ORGAVERA`}
                       className="collection-image"
                       loading="lazy"
@@ -629,12 +897,118 @@ function Home() {
                   <div className="collection-card-info">
                     <p>{product.type}</p>
                     <h3>{product.name}</h3>
+                    {product.description && (
+                      <p style={{ marginTop: "12px", marginBottom: "14px", textTransform: "none", letterSpacing: 0, lineHeight: 1.6, opacity: 0.72 }}>
+                        {product.description}
+                      </p>
+                    )}
                     <strong>{product.price}</strong>
                   </div>
                 </article>
               ))}
             </div>
           </div>
+
+          {/* ================= ADMIN-MANAGED CATEGORY PRODUCTS ================= */}
+
+          {[
+            {
+              id: "soaps-products",
+              number: "03",
+              title: "Artisan Soaps",
+              items: adminCatalog.soaps,
+            },
+            {
+              id: "ingredients-products",
+              number: "04",
+              title: "Cosmetic Ingredients",
+              items: adminCatalog.ingredients,
+            },
+            {
+              id: "classes-products",
+              number: "05",
+              title: "Book a Class",
+              items: adminCatalog.classes,
+            },
+          ].map((category) => (
+            <div
+              className="collection-group reveal show"
+              id={category.id}
+              key={category.id}
+              style={{ scrollMarginTop: "130px" }}
+            >
+              <div className="collection-row-heading">
+                <div>
+                  <span>{category.number}</span>
+                  <p>{category.title.toUpperCase()}</p>
+                </div>
+                <small>
+                  {category.items.length} {category.items.length === 1 ? "listing" : "listings"}
+                </small>
+              </div>
+
+              <div
+                className="collection-scroll"
+                style={{
+                  overflow: "visible",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: "22px",
+                }}
+              >
+                {category.items.map((item) => (
+                  <article className="collection-card" key={item.id} style={{ minWidth: 0 }}>
+                    <div className="collection-image-wrap">
+                      <img
+                        src={normalizePublicImagePath(item.image)}
+                        alt={`${item.name} by ORGAVERA`}
+                        className="collection-image"
+                        loading="lazy"
+                        decoding="async"
+                        onError={(event) => {
+                          event.currentTarget.onerror = null;
+                          event.currentTarget.src = "/orgavera-logo.png";
+                          event.currentTarget.classList.add("collection-image-fallback");
+                        }}
+                      />
+
+                      {category.id !== "classes-products" && (
+                        <button
+                          type="button"
+                          className="collection-order"
+                          aria-label={`Add ${item.name} to cart`}
+                          onClick={() => addToCart(item)}
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="collection-card-info">
+                      <p>{item.type}</p>
+                      <h3>{item.name}</h3>
+                      {item.description && (
+                        <p
+                          style={{
+                            marginTop: "14px",
+                            marginBottom: "16px",
+                            textTransform: "none",
+                            letterSpacing: "0",
+                            lineHeight: "1.7",
+                            opacity: 0.72,
+                          }}
+                        >
+                          {item.description}
+                        </p>
+                      )}
+                      <strong>{item.price}</strong>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ))}
+
         </section>
 
         {/* ================= STORY SECTION ================= */}
@@ -1132,12 +1506,405 @@ function Home() {
   );
 }
 
+
+function CategoryCollectionPage({ categoryKey }) {
+  const config = categoryPageConfig[categoryKey];
+
+  const loadCatalog = () => {
+    try {
+      const saved = window.localStorage.getItem("orgaveraAdminCatalog");
+      if (!saved) return defaultAdminCatalog;
+      const parsed = JSON.parse(saved);
+
+      return {
+        skincare: Array.isArray(parsed.skincare) ? parsed.skincare : defaultAdminCatalog.skincare,
+        haircare: Array.isArray(parsed.haircare) ? parsed.haircare : defaultAdminCatalog.haircare,
+        soaps: Array.isArray(parsed.soaps) ? parsed.soaps : defaultAdminCatalog.soaps,
+        ingredients: Array.isArray(parsed.ingredients)
+          ? parsed.ingredients
+          : defaultAdminCatalog.ingredients,
+        classes: Array.isArray(parsed.classes)
+          ? parsed.classes
+          : defaultAdminCatalog.classes,
+      };
+    } catch {
+      return defaultAdminCatalog;
+    }
+  };
+
+  const [catalog, setCatalog] = useState(loadCatalog);
+
+  useEffect(() => {
+    const refreshCatalog = () => setCatalog(loadCatalog);
+
+    window.addEventListener("storage", refreshCatalog);
+    window.addEventListener("orgavera-catalog-updated", refreshCatalog);
+
+    return () => {
+      window.removeEventListener("storage", refreshCatalog);
+      window.removeEventListener("orgavera-catalog-updated", refreshCatalog);
+    };
+  }, []);
+
+  if (!config) {
+    return <Navigate to="/" replace />;
+  }
+
+  const items = catalog[config.storageKey] || [];
+
+  return (
+    <div className="website">
+      <header className="navbar">
+        <Link to="/" className="brand">
+          <img src="/orgavera-logo.png" alt="ORGAVERA logo" />
+          <div className="brand-name">
+            <h2>ORGAVERA</h2>
+            <span>Pure · Natural · Organic</span>
+          </div>
+        </Link>
+
+        <nav className="nav-links">
+          <Link to="/">Home</Link>
+          <Link to="/#products">Products</Link>
+          <Link to="/#story">Our Story</Link>
+          <Link to="/#ingredients">Ingredients</Link>
+          <Link to="/#contact">Contact</Link>
+        </nav>
+
+        <div className="navbar-actions">
+          <Link to="/login" className="navbar-button login-nav-button">
+            Login
+            <span>↗</span>
+          </Link>
+          <Link to="/signup" className="navbar-button signup-nav-button">
+            Sign Up
+            <span>↗</span>
+          </Link>
+        </div>
+      </header>
+
+      <main>
+        <section
+          className="products-section"
+          style={{
+            minHeight: "100vh",
+            paddingTop: "150px",
+            paddingBottom: "100px",
+          }}
+        >
+          <div className="products-heading reveal show">
+            <div>
+              <p className="section-label">
+                {config.number} / {config.eyebrow}
+              </p>
+
+              <h2>
+                {config.title.split(" ")[0]}
+                <br />
+                <em>{config.title.split(" ").slice(1).join(" ")}.</em>
+              </h2>
+            </div>
+
+            <p>
+              Manage these listings from the ORGAVERA admin panel. Product image,
+              details and price updates will appear here automatically in this
+              browser.
+            </p>
+          </div>
+
+          <div className="collection-group reveal show">
+            <div className="collection-row-heading">
+              <div>
+                <span>{config.number}</span>
+                <p>{config.title.toUpperCase()}</p>
+              </div>
+
+              <small>
+                {items.length} {items.length === 1 ? "listing" : "listings"}
+              </small>
+            </div>
+
+            <div
+              className="collection-scroll"
+              style={{
+                overflow: "visible",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: "22px",
+              }}
+            >
+              {items.map((item) => (
+                <article
+                  className="collection-card"
+                  key={item.id}
+                  style={{ minWidth: 0 }}
+                >
+                  <div className="collection-image-wrap">
+                    <img
+                      src={normalizePublicImagePath(item.image)}
+                      alt={`${item.name} by ORGAVERA`}
+                      className="collection-image"
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => {
+                        event.currentTarget.onerror = null;
+                        event.currentTarget.src = "/orgavera-logo.png";
+                        event.currentTarget.classList.add(
+                          "collection-image-fallback"
+                        );
+                      }}
+                    />
+                  </div>
+
+                  <div className="collection-card-info">
+                    <p>{item.type}</p>
+                    <h3>{item.name}</h3>
+
+                    {item.description && (
+                      <p
+                        style={{
+                          marginTop: "14px",
+                          marginBottom: "16px",
+                          textTransform: "none",
+                          letterSpacing: "0",
+                          lineHeight: "1.7",
+                          opacity: 0.72,
+                        }}
+                      >
+                        {item.description}
+                      </p>
+                    )}
+
+                    <strong>{item.price}</strong>
+
+                    <a
+                      href="https://wa.me/923709301194"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-link"
+                      style={{
+                        display: "inline-flex",
+                        marginTop: "20px",
+                      }}
+                    >
+                      {categoryKey === "classes"
+                        ? "Ask / Book on WhatsApp →"
+                        : "Ask / Order on WhatsApp →"}
+                    </a>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {!items.length && (
+              <div
+                style={{
+                  marginTop: "25px",
+                  padding: "40px",
+                  border: "1px solid rgba(210,168,74,.22)",
+                  textAlign: "center",
+                }}
+              >
+                <p>No listings are available in this collection yet.</p>
+              </div>
+            )}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+
+
+const ADMIN_PASSWORD = "hamna2722";
+const ADMIN_SESSION_KEY = "orgaveraAdminAuthorized";
+
+function ProtectedAdmin() {
+  const [authorized, setAuthorized] = useState(
+    () => sessionStorage.getItem(ADMIN_SESSION_KEY) === "true"
+  );
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleAdminLogin = (event) => {
+    event.preventDefault();
+
+    if (password === ADMIN_PASSWORD) {
+      sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+      setAuthorized(true);
+      setPassword("");
+      setError("");
+      return;
+    }
+
+    setError("Incorrect admin password.");
+  };
+
+  const handleAdminLogout = () => {
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    setAuthorized(false);
+  };
+
+  if (authorized) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={handleAdminLogout}
+          style={{
+            position: "fixed",
+            top: "18px",
+            right: "18px",
+            zIndex: 9999,
+            padding: "10px 16px",
+            borderRadius: "999px",
+            border: "1px solid rgba(210,168,74,.5)",
+            background: "#111",
+            color: "#fff",
+            cursor: "pointer",
+            fontWeight: 700,
+          }}
+        >
+          Admin Logout
+        </button>
+        <Admin />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        padding: "24px",
+        background:
+          "radial-gradient(circle at top, rgba(161,129,64,.18), transparent 34%), #0c0d0c",
+        color: "#fff",
+      }}
+    >
+      <form
+        onSubmit={handleAdminLogin}
+        style={{
+          width: "min(430px, 100%)",
+          padding: "38px",
+          border: "1px solid rgba(210,168,74,.28)",
+          borderRadius: "24px",
+          background: "rgba(20,22,20,.96)",
+          boxShadow: "0 24px 70px rgba(0,0,0,.35)",
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: "28px" }}>
+          <img
+            src="/orgavera-logo.png"
+            alt="ORGAVERA"
+            style={{ width: "78px", height: "78px", objectFit: "contain" }}
+          />
+          <p
+            style={{
+              margin: "16px 0 6px",
+              fontSize: "12px",
+              letterSpacing: "3px",
+              color: "#d2a84a",
+            }}
+          >
+            AUTHORIZED ACCESS ONLY
+          </p>
+          <h1 style={{ margin: 0, fontSize: "32px" }}>ORGAVERA Admin</h1>
+          <p style={{ margin: "10px 0 0", opacity: 0.65 }}>
+            Enter the admin password to manage your catalog.
+          </p>
+        </div>
+
+        <label style={{ display: "block", marginBottom: "10px", fontWeight: 600 }}>
+          Admin Password
+        </label>
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setError("");
+          }}
+          placeholder="Enter password"
+          autoFocus
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            padding: "14px 16px",
+            borderRadius: "12px",
+            border: error
+              ? "1px solid #ff7b7b"
+              : "1px solid rgba(255,255,255,.18)",
+            background: "rgba(255,255,255,.06)",
+            color: "#fff",
+            outline: "none",
+            fontSize: "16px",
+          }}
+        />
+
+        {error && (
+          <p style={{ margin: "10px 0 0", color: "#ff9a9a", fontSize: "14px" }}>
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          style={{
+            width: "100%",
+            marginTop: "20px",
+            padding: "14px 18px",
+            borderRadius: "12px",
+            border: 0,
+            background: "#d2a84a",
+            color: "#111",
+            fontWeight: 800,
+            cursor: "pointer",
+            fontSize: "15px",
+          }}
+        >
+          Unlock Admin Panel →
+        </button>
+
+        <Link
+          to="/"
+          style={{
+            display: "block",
+            marginTop: "18px",
+            textAlign: "center",
+            color: "rgba(255,255,255,.7)",
+            textDecoration: "none",
+          }}
+        >
+          ← Back to website
+        </Link>
+      </form>
+    </div>
+  );
+}
+
 function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/admin" element={<ProtectedAdmin />} />
+      <Route
+        path="/collection/soaps"
+        element={<CategoryCollectionPage categoryKey="soaps" />}
+      />
+      <Route
+        path="/collection/cosmetic-ingredients"
+        element={<CategoryCollectionPage categoryKey="ingredients" />}
+      />
+      <Route
+        path="/classes"
+        element={<CategoryCollectionPage categoryKey="classes" />}
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
