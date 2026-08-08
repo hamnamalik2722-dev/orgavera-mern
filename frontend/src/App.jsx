@@ -1,3 +1,9 @@
+
+
+
+
+
+
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { Routes, Route, Navigate, Link } from "react-router-dom";
@@ -279,11 +285,45 @@ const fetchCatalogFromApi = async () => {
 function Home() {
   const CART_STORAGE_KEY = "orgaveraCart";
 
+  const getCartKey = (item) =>
+    String(item?.name || item?._id || item?.id || "")
+      .trim()
+      .toLowerCase();
+
   const readSavedCart = () => {
     try {
       const savedCart = window.localStorage.getItem(CART_STORAGE_KEY);
       const parsedCart = savedCart ? JSON.parse(savedCart) : [];
-      return Array.isArray(parsedCart) ? parsedCart : [];
+
+      if (!Array.isArray(parsedCart)) return [];
+
+      // Repair older cart data and merge duplicate entries for the same product.
+      const merged = new Map();
+
+      parsedCart.forEach((item) => {
+        const cartKey = getCartKey(item);
+        if (!cartKey) return;
+
+        const quantity = Math.max(1, Number(item.quantity) || 1);
+
+        if (merged.has(cartKey)) {
+          const existing = merged.get(cartKey);
+          merged.set(cartKey, {
+            ...existing,
+            quantity: existing.quantity + quantity,
+          });
+        } else {
+          merged.set(cartKey, {
+            ...item,
+            cartKey,
+            quantity,
+          });
+        }
+      });
+
+      const repairedCart = Array.from(merged.values());
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(repairedCart));
+      return repairedCart;
     } catch (error) {
       console.error("Could not load saved cart:", error);
       return [];
@@ -321,34 +361,51 @@ function Home() {
   const getNumericPrice = (price) => Number(String(price).replace(/[^0-9]/g, "")) || 0;
 
   const addToCart = (product) => {
+    const cartKey = getCartKey(product);
+
     updateCart((currentCart) => {
-      const existing = currentCart.find((item) => item.id === product.id);
+      const existing = currentCart.find(
+        (item) => (item.cartKey || getCartKey(item)) === cartKey
+      );
+
       if (existing) {
         return currentCart.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          (item.cartKey || getCartKey(item)) === cartKey
+            ? { ...item, cartKey, quantity: (Number(item.quantity) || 1) + 1 }
+            : item
         );
       }
-      return [...currentCart, { ...product, quantity: 1 }];
+
+      return [...currentCart, { ...product, cartKey, quantity: 1 }];
     });
+
     setNotice(`${product.name} added to cart`);
     setCheckoutStep(1);
     setIsCartOpen(true);
     window.setTimeout(() => setNotice(""), 2200);
   };
 
-  const updateQuantity = (id, change) => {
+  const updateQuantity = (cartKey, change) => {
     updateCart((currentCart) =>
       currentCart
         .map((item) =>
-          item.id === id ? { ...item, quantity: Math.max(0, item.quantity + change) } : item
+          (item.cartKey || getCartKey(item)) === cartKey
+            ? {
+              ...item,
+              cartKey,
+              quantity: Math.max(0, (Number(item.quantity) || 1) + change),
+            }
+            : item
         )
         .filter((item) => item.quantity > 0)
     );
   };
 
-  const removeFromCart = (id) => {
+  const removeFromCart = (cartKey) => {
     updateCart((currentCart) =>
-      currentCart.filter((item) => item.id !== id)
+      currentCart.filter(
+        (item) => (item.cartKey || getCartKey(item)) !== cartKey
+      )
     );
   };
 
@@ -959,7 +1016,7 @@ function Home() {
                 }}
               >
                 {category.items.map((item) => (
-                  <article className="collection-card" key={item.id} style={{ minWidth: 0 }}>
+                  <article className="collection-card" key={item.cartKey || getCartKey(item)} style={{ minWidth: 0 }}>
                     <div className="collection-image-wrap">
                       <img
                         src={normalizePublicImagePath(item.image)}
@@ -1260,20 +1317,20 @@ function Home() {
 
                   <div className="cart-items expanded-cart-items">
                     {cart.map((item) => (
-                      <article className="cart-item premium-cart-item" key={item.id}>
+                      <article className="cart-item premium-cart-item" key={item.cartKey || getCartKey(item)}>
                         <div className="cart-item-image-wrap"><img src={item.image} alt={item.name} /></div>
                         <div className="cart-item-copy">
                           <small>{item.category || item.type || "ORGAVERA Care"}</small>
                           <h4>{item.name}</h4>
                           <p>{item.price} each</p>
                           <div className="cart-quantity" aria-label={`Quantity of ${item.name}`}>
-                            <button type="button" onClick={() => updateQuantity(item.id, -1)}>−</button>
+                            <button type="button" onClick={() => updateQuantity(item.cartKey || getCartKey(item), -1)}>−</button>
                             <span>{item.quantity}</span>
-                            <button type="button" onClick={() => updateQuantity(item.id, 1)}>+</button>
+                            <button type="button" onClick={() => updateQuantity(item.cartKey || getCartKey(item), 1)}>+</button>
                           </div>
                         </div>
                         <strong className="cart-line-total">Rs. {getNumericPrice(item.price) * item.quantity}</strong>
-                        <button type="button" className="cart-remove" onClick={() => removeFromCart(item.id)}>×</button>
+                        <button type="button" className="cart-remove" onClick={() => removeFromCart(item.cartKey || getCartKey(item))}>×</button>
                       </article>
                     ))}
                   </div>
@@ -1623,7 +1680,7 @@ function CategoryCollectionPage({ categoryKey }) {
               {items.map((item) => (
                 <article
                   className="collection-card"
-                  key={item.id}
+                  key={item.cartKey || getCartKey(item)}
                   style={{ minWidth: 0 }}
                 >
                   <div className="collection-image-wrap">
