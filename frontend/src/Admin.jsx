@@ -1,270 +1,92 @@
-import { useMemo, useState } from "react";
+
+
+
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import "./Admin.css";
 
-const STORAGE_KEY = "orgaveraAdminCatalog";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const starterCatalog = {
-    skincare: [
-        {
-            id: "skin-1",
-            name: "Brightening Serum",
-            type: "Serum",
-            price: "Rs. 850",
-            image: "/serum.png",
-            description: "A lightweight brightening serum for a simple everyday skincare routine.",
-        },
-        {
-            id: "skin-2",
-            name: "Sunblock",
-            type: "Sun Care",
-            price: "Rs. 750",
-            image: "/glow-mask.png",
-            description: "Daily sun-care protection designed for a comfortable skincare routine.",
-        },
-        {
-            id: "skin-3",
-            name: "Herbal Face Wash",
-            type: "Cleanser",
-            price: "Rs. 650",
-            image: "/face wash.png",
-            description: "A gentle herbal cleanser for fresh, clean-feeling skin.",
-        },
-        {
-            id: "skin-4",
-            name: "Glow Mask",
-            type: "Face Mask",
-            price: "Rs. 800",
-            image: "/glow mask.png",
-            description: "A botanical-inspired mask created for a refreshed and cared-for look.",
-        },
-        {
-            id: "skin-5",
-            name: "Night Repair Cream",
-            type: "Night Care",
-            price: "Rs. 900",
-            image: "/night cream.png",
-            description: "A rich night-care cream for a soft and nourished skin feel.",
-        },
-    ],
-    haircare: [
-        {
-            id: "hair-1",
-            name: "Herbal Hair Oil",
-            type: "Hair Oil",
-            price: "Rs. 700",
-            image: "/hair-oil.png",
-            description: "A botanical hair oil for a nourishing traditional hair-care ritual.",
-        },
-        {
-            id: "hair-2",
-            name: "Herbal Shampoo",
-            type: "Shampoo",
-            price: "Rs. 600",
-            image: "/shampoo.png",
-            description: "A herbal shampoo created for gentle everyday cleansing and care.",
-        },
-        {
-            id: "hair-3",
-            name: "Herbal Conditioner",
-            type: "Conditioner",
-            price: "Rs. 700",
-            image: "/conditioner.png",
-            description: "A conditioning formula designed to leave hair feeling softer and smoother.",
-        },
-    ],
-    soaps: [
-        {
-            id: "soap-1",
-            name: "Loofah Honey Soap",
-            type: "Handcrafted Soap",
-            price: "Rs. 450",
-            image: "/soap-loofah-honey.png",
-            description: "A handcrafted cleansing bar with a botanical, everyday-care feel.",
-        },
-        {
-            id: "soap-2",
-            name: "Turmeric Soap",
-            type: "Botanical Soap",
-            price: "Rs. 400",
-            image: "/soap-turmeric.png",
-            description: "A small-batch botanical soap created for a simple cleansing ritual.",
-        },
-    ],
-    ingredients: [
-        {
-            id: "ingredient-1",
-            name: "Niacinamide",
-            type: "Skincare Active",
-            price: "Ask for price",
-            image: "/niacinamide.png",
-            description: "A cosmetic-grade active for balanced skincare formulations.",
-        },
-        {
-            id: "ingredient-2",
-            name: "Alpha Arbutin",
-            type: "Skincare Active",
-            price: "Ask for price",
-            image: "/alpha-arbutin.png",
-            description: "A formulation ingredient for selected skincare products.",
-        },
-    ],
-    classes: [
-        {
-            id: "class-1",
-            name: "Herbal Skincare Formulation",
-            type: "Hands-on Class",
-            price: "Book a seat",
-            image: "/skincare-class.png",
-            description: "A practical guided session covering the basics of skincare formulation.",
-        },
-        {
-            id: "class-2",
-            name: "Haircare Formulation Workshop",
-            type: "Practical Workshop",
-            price: "Book a seat",
-            image: "/haircare-class.png",
-            description: "A hands-on learning session focused on practical haircare formulation.",
-        },
-    ],
+const CATEGORY_MAP = { skincare: "skin-care", haircare: "hair-care", soaps: "soaps", ingredients: "ingredients", classes: "classes" };
+const CATEGORY_ALIASES = {
+    skincare: ["skin-care", "skincare", "skin care"], haircare: ["hair-care", "haircare", "hair care"],
+    soaps: ["soaps", "soap", "artisan soaps"], ingredients: ["ingredients", "cosmetic ingredients"],
+    classes: ["classes", "class", "book class"]
 };
-
-const loadCatalog = () => {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (!saved) return starterCatalog;
-        const parsed = JSON.parse(saved);
-        return {
-            skincare: Array.isArray(parsed.skincare) ? parsed.skincare : starterCatalog.skincare,
-            haircare: Array.isArray(parsed.haircare) ? parsed.haircare : starterCatalog.haircare,
-            soaps: Array.isArray(parsed.soaps) ? parsed.soaps : starterCatalog.soaps,
-            ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : starterCatalog.ingredients,
-            classes: Array.isArray(parsed.classes) ? parsed.classes : starterCatalog.classes,
-        };
-    } catch {
-        return starterCatalog;
-    }
-};
-
-
-const normalizePublicImagePath = (value) => {
+const norm = v => String(v || "").trim().toLowerCase();
+const normalizePublicImagePath = value => {
     const image = String(value || "").trim().replace(/\\/g, "/");
-
     if (!image) return "/orgavera-logo.png";
     if (/^(https?:|data:|blob:)/i.test(image)) return image;
-
-    // Vite public-folder images should always start with /.
     return image.startsWith("/") ? image : `/${image.replace(/^\.\//, "")}`;
 };
-
-const emptyForm = {
-    name: "",
-    type: "",
-    price: "",
-    image: "",
-    description: "",
-};
+const emptyForm = { name: "", type: "", price: "", image: "", description: "" };
 
 export default function Admin() {
-    const [catalog, setCatalog] = useState(loadCatalog);
+    const [products, setProducts] = useState([]);
     const [category, setCategory] = useState("skincare");
     const [form, setForm] = useState(emptyForm);
     const [editingId, setEditingId] = useState(null);
     const [search, setSearch] = useState("");
     const [notice, setNotice] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
-    const items = catalog[category] || [];
+    const flash = m => { setNotice(m); setTimeout(() => setNotice(""), 2600) };
+    const fetchProducts = async () => {
+        try {
+            setLoading(true);
+            const res = await fetch(`${API_URL}/api/products`);
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || "Unable to load products");
+            setProducts(Array.isArray(json.data) ? json.data : []);
+        } catch (e) { flash(e.message) } finally { setLoading(false) }
+    };
+    useEffect(() => { fetchProducts() }, []);
 
+    const items = useMemo(() => products.filter(p => (CATEGORY_ALIASES[category] || []).includes(norm(p.category))), [products, category]);
     const filteredItems = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return items;
-        return items.filter((item) =>
-            [item.name, item.type, item.price, item.description]
-                .join(" ")
-                .toLowerCase()
-                .includes(q)
-        );
+        return q ? items.filter(i => [i.name, i.type, i.price, i.description].join(" ").toLowerCase().includes(q)) : items;
     }, [items, search]);
 
-    const saveCatalog = (nextCatalog, message) => {
-        setCatalog(nextCatalog);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextCatalog));
-        window.dispatchEvent(new Event("orgavera-catalog-updated"));
-        setNotice(message);
-        window.setTimeout(() => setNotice(""), 2200);
+    const resetForm = () => { setForm(emptyForm); setEditingId(null) };
+
+    const handleSubmit = async e => {
+        e.preventDefault();
+        if (!form.name.trim() || !form.type.trim() || !String(form.price).trim()) { flash("Name, type and price are required."); return }
+        const price = Number(String(form.price).replace(/[^0-9.]/g, ""));
+        if (!Number.isFinite(price)) { flash("Enter numeric price, for example 850."); return }
+        const payload = { name: form.name.trim(), category: CATEGORY_MAP[category], type: form.type.trim(), price, image: normalizePublicImagePath(form.image), description: form.description.trim() };
+        try {
+            setSaving(true);
+            const res = await fetch(editingId ? `${API_URL}/api/products/${editingId}` : `${API_URL}/api/products`, {
+                method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || "Could not save product");
+            flash(editingId ? "Listing updated in MongoDB." : "Listing saved to MongoDB.");
+            resetForm(); await fetchProducts();
+        } catch (e) { flash(e.message) } finally { setSaving(false) }
     };
 
-    const resetForm = () => {
-        setForm(emptyForm);
-        setEditingId(null);
-    };
-
-    const handleSubmit = (event) => {
-        event.preventDefault();
-
-        if (!form.name.trim() || !form.type.trim() || !form.price.trim()) {
-            setNotice("Name, type and price are required.");
-            window.setTimeout(() => setNotice(""), 2200);
-            return;
-        }
-
-        const normalized = {
-            ...form,
-            image: normalizePublicImagePath(form.image),
-            description: form.description.trim(),
-        };
-
-        let nextItems;
-
-        if (editingId) {
-            nextItems = items.map((item) =>
-                item.id === editingId ? { ...item, ...normalized } : item
-            );
-        } else {
-            nextItems = [
-                ...items,
-                {
-                    ...normalized,
-                    id: `${category}-${Date.now()}`,
-                },
-            ];
-        }
-
-        const nextCatalog = { ...catalog, [category]: nextItems };
-        saveCatalog(
-            nextCatalog,
-            editingId ? "Listing updated successfully." : "New listing added successfully."
-        );
-        resetForm();
-    };
-
-    const editItem = (item) => {
-        setEditingId(item.id);
-        setForm({
-            name: item.name || "",
-            type: item.type || "",
-            price: item.price || "",
-            image: item.image || "",
-            description: item.description || "",
-        });
+    const editItem = item => {
+        setEditingId(item._id);
+        setForm({ name: item.name || "", type: item.type || "", price: item.price ?? "", image: item.image || "", description: item.description || "" });
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    const deleteItem = (id) => {
-        if (!window.confirm("Delete this listing?")) return;
-        const nextCatalog = {
-            ...catalog,
-            [category]: items.filter((item) => item.id !== id),
-        };
-        saveCatalog(nextCatalog, "Listing deleted.");
-        if (editingId === id) resetForm();
+    const deleteItem = async id => {
+        if (!window.confirm("Delete this listing from MongoDB?")) return;
+        try {
+            const res = await fetch(`${API_URL}/api/products/${id}`, { method: "DELETE" });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.message || "Could not delete product");
+            flash("Listing deleted from MongoDB."); if (editingId === id) resetForm(); await fetchProducts();
+        } catch (e) { flash(e.message) }
     };
 
-    const changeCategory = (nextCategory) => {
-        setCategory(nextCategory);
-        resetForm();
-        setSearch("");
-    };
+    const changeCategory = nextCategory => { setCategory(nextCategory); resetForm(); setSearch("") };
 
     return (
         <div className="org-admin-page">
@@ -425,8 +247,8 @@ export default function Admin() {
                             </div>
                         </div>
 
-                        <button type="submit" className="org-admin-save">
-                            {editingId ? "Update Listing" : "Add Listing"}
+                        <button type="submit" className="org-admin-save" disabled={saving}>
+                            {saving ? "Saving..." : editingId ? "Update Listing" : "Add Listing"}
                             <span>→</span>
                         </button>
                     </form>
@@ -436,7 +258,7 @@ export default function Admin() {
                     <div className="org-admin-list-head">
                         <div>
                             <span>LIVE CATALOG</span>
-                            <h2>{items.length} listings</h2>
+                            <h2>{loading ? "Loading..." : `${items.length} listings`}</h2>
                         </div>
 
                         <input
@@ -461,7 +283,7 @@ export default function Admin() {
 
                             <tbody>
                                 {filteredItems.map((item) => (
-                                    <tr key={item.id}>
+                                    <tr key={item._id}>
                                         <td>
                                             <div className="org-admin-product-cell">
                                                 <img
@@ -479,12 +301,12 @@ export default function Admin() {
                                             </div>
                                         </td>
                                         <td>{item.type}</td>
-                                        <td><b className="org-admin-price">{item.price}</b></td>
+                                        <td><b className="org-admin-price">Rs. {item.price}</b></td>
                                         <td className="org-admin-details-cell">{item.description || "—"}</td>
                                         <td>
                                             <div className="org-admin-actions">
                                                 <button onClick={() => editItem(item)}>Edit</button>
-                                                <button className="danger" onClick={() => deleteItem(item.id)}>
+                                                <button className="danger" onClick={() => deleteItem(item._id)}>
                                                     Delete
                                                 </button>
                                             </div>

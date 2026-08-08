@@ -1,6 +1,3 @@
-
-
-
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { Routes, Route, Navigate, Link } from "react-router-dom";
@@ -228,6 +225,57 @@ const categoryPageConfig = {
 };
 
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+const API_CATEGORY_KEYS = {
+  "skin-care": "skincare",
+  skincare: "skincare",
+  "skin care": "skincare",
+  "hair-care": "haircare",
+  haircare: "haircare",
+  "hair care": "haircare",
+  soaps: "soaps",
+  soap: "soaps",
+  ingredients: "ingredients",
+  "cosmetic ingredients": "ingredients",
+  classes: "classes",
+  class: "classes",
+};
+
+const buildCatalogFromApi = (apiProducts) => {
+  const catalog = { skincare: [], haircare: [], soaps: [], ingredients: [], classes: [] };
+
+  (Array.isArray(apiProducts) ? apiProducts : []).forEach((item) => {
+    const key = API_CATEGORY_KEYS[String(item.category || "").trim().toLowerCase()];
+    if (!key) return;
+
+    catalog[key].push({
+      ...item,
+      id: item._id || item.id,
+      price:
+        typeof item.price === "number"
+          ? `Rs. ${item.price}`
+          : String(item.price || ""),
+      image: normalizePublicImagePath(item.image),
+      type: item.type || item.category || "",
+      description: item.description || "",
+    });
+  });
+
+  return catalog;
+};
+
+const fetchCatalogFromApi = async () => {
+  const response = await fetch(`${API_URL}/api/products`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Could not load products.");
+  }
+
+  return buildCatalogFromApi(result.data);
+};
+
 function Home() {
   const CART_STORAGE_KEY = "orgaveraCart";
 
@@ -248,71 +296,25 @@ function Home() {
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
   const [checkoutStep, setCheckoutStep] = useState(1);
 
-  // Keep the homepage category product sections in sync with the Admin Panel.
-  const readAdminCatalog = () => {
-    try {
-      const saved = window.localStorage.getItem("orgaveraAdminCatalog");
-      if (!saved) return defaultAdminCatalog;
-      const parsed = JSON.parse(saved);
-      return {
-        skincare: Array.isArray(parsed.skincare) ? parsed.skincare : defaultAdminCatalog.skincare,
-        haircare: Array.isArray(parsed.haircare) ? parsed.haircare : defaultAdminCatalog.haircare,
-        soaps: Array.isArray(parsed.soaps) ? parsed.soaps : defaultAdminCatalog.soaps,
-        ingredients: Array.isArray(parsed.ingredients)
-          ? parsed.ingredients
-          : defaultAdminCatalog.ingredients,
-        classes: Array.isArray(parsed.classes) ? parsed.classes : defaultAdminCatalog.classes,
-      };
-    } catch (error) {
-      console.error("Could not load admin catalog:", error);
-      return defaultAdminCatalog;
-    }
-  };
+  // Load the live product catalog from the MongoDB-backed API.
+  const [adminCatalog, setAdminCatalog] = useState(defaultAdminCatalog);
 
-  const [adminCatalog, setAdminCatalog] = useState(readAdminCatalog);
+  useEffect(() => {
+    let active = true;
 
-  const updateCart = (updater) => {
-    setCart((currentCart) => {
-      const nextCart =
-        typeof updater === "function" ? updater(currentCart) : updater;
-
+    const refreshCatalog = async () => {
       try {
-        window.localStorage.setItem(
-          CART_STORAGE_KEY,
-          JSON.stringify(nextCart)
-        );
+        const liveCatalog = await fetchCatalogFromApi();
+        if (active) setAdminCatalog(liveCatalog);
       } catch (error) {
-        console.error("Could not save cart:", error);
+        console.error("Could not load MongoDB catalog:", error);
       }
-
-      return nextCart;
-    });
-  };
-
-  useEffect(() => {
-    const syncCartFromStorage = () => {
-      setCart(readSavedCart());
     };
 
-    window.addEventListener("pageshow", syncCartFromStorage);
-    window.addEventListener("storage", syncCartFromStorage);
+    refreshCatalog();
 
     return () => {
-      window.removeEventListener("pageshow", syncCartFromStorage);
-      window.removeEventListener("storage", syncCartFromStorage);
-    };
-  }, []);
-
-  useEffect(() => {
-    const refreshCatalog = () => setAdminCatalog(readAdminCatalog());
-    window.addEventListener("storage", refreshCatalog);
-    window.addEventListener("orgavera-catalog-updated", refreshCatalog);
-    window.addEventListener("pageshow", refreshCatalog);
-
-    return () => {
-      window.removeEventListener("storage", refreshCatalog);
-      window.removeEventListener("orgavera-catalog-updated", refreshCatalog);
-      window.removeEventListener("pageshow", refreshCatalog);
+      active = false;
     };
   }, []);
 
@@ -1510,39 +1512,24 @@ function Home() {
 function CategoryCollectionPage({ categoryKey }) {
   const config = categoryPageConfig[categoryKey];
 
-  const loadCatalog = () => {
-    try {
-      const saved = window.localStorage.getItem("orgaveraAdminCatalog");
-      if (!saved) return defaultAdminCatalog;
-      const parsed = JSON.parse(saved);
-
-      return {
-        skincare: Array.isArray(parsed.skincare) ? parsed.skincare : defaultAdminCatalog.skincare,
-        haircare: Array.isArray(parsed.haircare) ? parsed.haircare : defaultAdminCatalog.haircare,
-        soaps: Array.isArray(parsed.soaps) ? parsed.soaps : defaultAdminCatalog.soaps,
-        ingredients: Array.isArray(parsed.ingredients)
-          ? parsed.ingredients
-          : defaultAdminCatalog.ingredients,
-        classes: Array.isArray(parsed.classes)
-          ? parsed.classes
-          : defaultAdminCatalog.classes,
-      };
-    } catch {
-      return defaultAdminCatalog;
-    }
-  };
-
-  const [catalog, setCatalog] = useState(loadCatalog);
+  const [catalog, setCatalog] = useState(defaultAdminCatalog);
 
   useEffect(() => {
-    const refreshCatalog = () => setCatalog(loadCatalog);
+    let active = true;
 
-    window.addEventListener("storage", refreshCatalog);
-    window.addEventListener("orgavera-catalog-updated", refreshCatalog);
+    const refreshCatalog = async () => {
+      try {
+        const liveCatalog = await fetchCatalogFromApi();
+        if (active) setCatalog(liveCatalog);
+      } catch (error) {
+        console.error("Could not load MongoDB category catalog:", error);
+      }
+    };
+
+    refreshCatalog();
 
     return () => {
-      window.removeEventListener("storage", refreshCatalog);
-      window.removeEventListener("orgavera-catalog-updated", refreshCatalog);
+      active = false;
     };
   }, []);
 
