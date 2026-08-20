@@ -12881,3 +12881,55 @@ footer {
     font-size: 19px;
   }
 }
+
+/* =========================================================
+   PRODUCT IMAGE CANVAS — LARGER, CLEANER, MORE PROMINENT
+   Visual-only override. No cart/routes/admin/product logic changed.
+========================================================= */
+.premium-product-image-wrap {
+  aspect-ratio: 1 / 1 !important;
+  min-height: 0 !important;
+  padding: 14px !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(73, 105, 65, 0.18), transparent 54%),
+    linear-gradient(145deg, #0b100c 0%, #070a08 100%) !important;
+}
+
+.premium-product-image-wrap::after {
+  inset: auto 14% 5% 14% !important;
+  height: 10% !important;
+  opacity: .55;
+}
+
+.premium-product-image {
+  width: 96% !important;
+  height: 96% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  border-radius: 10px;
+  filter: drop-shadow(0 18px 22px rgba(0, 0, 0, .30)) !important;
+}
+
+.premium-product-card:hover .premium-product-image {
+  transform: scale(1.035) !important;
+}
+
+@media (max-width: 900px) {
+  .premium-product-image-wrap {
+    aspect-ratio: 1 / 1 !important;
+    padding: 11px !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .premium-product-image-wrap {
+    aspect-ratio: 1 / 1 !important;
+    padding: 8px !important;
+  }
+
+  .premium-product-image {
+    width: 98% !important;
+    height: 98% !important;
+    border-radius: 8px;
+  }
+}
