@@ -1,14 +1,12 @@
-
-
-
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import "./Admin.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const CATEGORY_MAP = { skincare: "skin-care", haircare: "hair-care", soaps: "soaps", ingredients: "ingredients", classes: "classes" };
+const CATEGORY_MAP = { bestsellers: "best-sellers", skincare: "skin-care", haircare: "hair-care", soaps: "soaps", ingredients: "ingredients", classes: "classes" };
 const CATEGORY_ALIASES = {
+    bestsellers: ["best-sellers", "best sellers", "bestsellers"],
     skincare: ["skin-care", "skincare", "skin care"], haircare: ["hair-care", "haircare", "hair care"],
     soaps: ["soaps", "soap", "artisan soaps"], ingredients: ["ingredients", "cosmetic ingredients"],
     classes: ["classes", "class", "book class"]
@@ -20,7 +18,15 @@ const normalizePublicImagePath = value => {
     if (/^(https?:|data:|blob:)/i.test(image)) return image;
     return image.startsWith("/") ? image : `/${image.replace(/^\.\//, "")}`;
 };
-const emptyForm = { name: "", type: "", price: "", image: "", description: "" };
+const emptyVariant = { label: "", price: "", stock: "" };
+const emptyForm = {
+    name: "",
+    type: "",
+    price: "",
+    image: "",
+    description: "",
+    variants: [],
+};
 
 export default function Admin() {
     const [products, setProducts] = useState([]);
@@ -50,14 +56,67 @@ export default function Admin() {
         return q ? items.filter(i => [i.name, i.type, i.price, i.description].join(" ").toLowerCase().includes(q)) : items;
     }, [items, search]);
 
-    const resetForm = () => { setForm(emptyForm); setEditingId(null) };
+    const resetForm = () => {
+        setForm({ ...emptyForm, variants: [] });
+        setEditingId(null);
+    };
+
+    const addVariant = () => {
+        setForm((current) => ({
+            ...current,
+            variants: [...(current.variants || []), { ...emptyVariant }],
+        }));
+    };
+
+    const updateVariant = (index, field, value) => {
+        setForm((current) => ({
+            ...current,
+            variants: (current.variants || []).map((variant, i) =>
+                i === index ? { ...variant, [field]: value } : variant
+            ),
+        }));
+    };
+
+    const removeVariant = (index) => {
+        setForm((current) => ({
+            ...current,
+            variants: (current.variants || []).filter((_, i) => i !== index),
+        }));
+    };
 
     const handleSubmit = async e => {
         e.preventDefault();
-        if (!form.name.trim() || !form.type.trim() || !String(form.price).trim()) { flash("Name, type and price are required."); return }
-        const price = Number(String(form.price).replace(/[^0-9.]/g, ""));
-        if (!Number.isFinite(price)) { flash("Enter numeric price, for example 850."); return }
-        const payload = { name: form.name.trim(), category: CATEGORY_MAP[category], type: form.type.trim(), price, image: normalizePublicImagePath(form.image), description: form.description.trim() };
+        if (!form.name.trim() || !form.type.trim()) {
+            flash("Name and type are required.");
+            return;
+        }
+
+        const cleanVariants = (form.variants || [])
+            .filter((variant) => String(variant.label || "").trim())
+            .map((variant) => ({
+                label: String(variant.label).trim(),
+                price: Number(String(variant.price).replace(/[^0-9.]/g, "")) || 0,
+                stock: Number(String(variant.stock).replace(/[^0-9]/g, "")) || 0,
+            }));
+
+        const basePrice = cleanVariants.length
+            ? cleanVariants[0].price
+            : Number(String(form.price).replace(/[^0-9.]/g, ""));
+
+        if (!Number.isFinite(basePrice) || basePrice <= 0) {
+            flash("Enter a valid price or add at least one size/price.");
+            return;
+        }
+
+        const payload = {
+            name: form.name.trim(),
+            category: CATEGORY_MAP[category],
+            type: form.type.trim(),
+            price: basePrice,
+            image: normalizePublicImagePath(form.image),
+            description: form.description.trim(),
+            variants: cleanVariants,
+        };
         try {
             setSaving(true);
             const res = await fetch(editingId ? `${API_URL}/api/products/${editingId}` : `${API_URL}/api/products`, {
@@ -72,7 +131,20 @@ export default function Admin() {
 
     const editItem = item => {
         setEditingId(item._id);
-        setForm({ name: item.name || "", type: item.type || "", price: item.price ?? "", image: item.image || "", description: item.description || "" });
+        setForm({
+            name: item.name || "",
+            type: item.type || "",
+            price: item.price ?? "",
+            image: item.image || "",
+            description: item.description || "",
+            variants: Array.isArray(item.variants)
+                ? item.variants.map((variant) => ({
+                    label: variant.label || variant.size || "",
+                    price: variant.price ?? "",
+                    stock: variant.stock ?? 0,
+                }))
+                : [],
+        });
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
@@ -100,6 +172,14 @@ export default function Admin() {
                 </Link>
 
                 <p className="org-admin-menu-label">CATALOG</p>
+
+                <button
+                    className={category === "bestsellers" ? "active" : ""}
+                    onClick={() => changeCategory("bestsellers")}
+                >
+                    <span>00</span>
+                    Best Seller Deals
+                </button>
 
                 <button
                     className={category === "skincare" ? "active" : ""}
@@ -153,15 +233,17 @@ export default function Admin() {
                         <p>CONTENT MANAGEMENT</p>
                         <h1>
                             Manage <em>{
-                                category === "skincare"
-                                    ? "Skin Care"
-                                    : category === "haircare"
-                                        ? "Hair Care"
-                                        : category === "ingredients"
-                                            ? "Ingredients"
-                                            : category === "classes"
-                                                ? "Classes"
-                                                : "Soaps"
+                                category === "bestsellers"
+                                    ? "Best Seller Deals"
+                                    : category === "skincare"
+                                        ? "Skin Care"
+                                        : category === "haircare"
+                                            ? "Hair Care"
+                                            : category === "ingredients"
+                                                ? "Ingredients"
+                                                : category === "classes"
+                                                    ? "Classes"
+                                                    : "Soaps"
                             }</em>
                         </h1>
                     </div>
@@ -211,6 +293,67 @@ export default function Admin() {
                             />
                         </label>
 
+                        <div className="org-admin-variants-field">
+                            <div className="org-admin-variants-heading">
+                                <div>
+                                    <span>SIZE / QUANTITY OPTIONS</span>
+                                    <small>
+                                        Add different sizes with their own price and stock, e.g. 100 ml, 150 ml, 200 ml.
+                                    </small>
+                                </div>
+                                <button type="button" className="org-admin-add-variant" onClick={addVariant}>
+                                    + Add Size
+                                </button>
+                            </div>
+
+                            {(form.variants || []).map((variant, index) => (
+                                <div className="org-admin-variant-row" key={index}>
+                                    <label>
+                                        <span>Size / Quantity</span>
+                                        <input
+                                            value={variant.label}
+                                            onChange={(e) => updateVariant(index, "label", e.target.value)}
+                                            placeholder="100 ml"
+                                        />
+                                    </label>
+
+                                    <label>
+                                        <span>Price</span>
+                                        <input
+                                            value={variant.price}
+                                            onChange={(e) => updateVariant(index, "price", e.target.value)}
+                                            placeholder="700"
+                                            inputMode="decimal"
+                                        />
+                                    </label>
+
+                                    <label>
+                                        <span>Stock</span>
+                                        <input
+                                            value={variant.stock}
+                                            onChange={(e) => updateVariant(index, "stock", e.target.value)}
+                                            placeholder="15"
+                                            inputMode="numeric"
+                                        />
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        className="org-admin-remove-variant"
+                                        onClick={() => removeVariant(index)}
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            ))}
+
+                            {(form.variants || []).length > 0 && (
+                                <small className="org-admin-variant-note">
+                                    The first size price will also be used as the product's starting price.
+                                </small>
+                            )}
+                        </div>
+
                         <label className="org-admin-image-field">
                             <span>Image path</span>
                             <input
@@ -225,7 +368,7 @@ export default function Admin() {
                         </label>
 
                         <label className="org-admin-description-field">
-                            <span>Details / description</span>
+                            <span>{category === "bestsellers" ? "Old price for deal" : "Details / description"}</span>
                             <textarea
                                 value={form.description}
                                 onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -301,7 +444,18 @@ export default function Admin() {
                                             </div>
                                         </td>
                                         <td>{item.type}</td>
-                                        <td><b className="org-admin-price">Rs. {item.price}</b></td>
+                                        <td>
+                                            <b className="org-admin-price">Rs. {item.price}</b>
+                                            {Array.isArray(item.variants) && item.variants.length > 0 && (
+                                                <div className="org-admin-table-variants">
+                                                    {item.variants.map((variant, index) => (
+                                                        <small key={index}>
+                                                            {variant.label || variant.size}: Rs. {variant.price} · Stock {variant.stock ?? 0}
+                                                        </small>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="org-admin-details-cell">{item.description || "—"}</td>
                                         <td>
                                             <div className="org-admin-actions">

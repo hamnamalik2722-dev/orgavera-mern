@@ -471,3 +471,24 @@
         grid-column: auto;
     }
 }
+
+
+/* 2026 premium admin finishing touches */
+.org-admin-sidebar {
+    overflow-y: auto;
+}
+
+.org-admin-sidebar>button {
+    border-radius: 10px;
+    margin-bottom: 4px;
+}
+
+.org-admin-form-card,
+.org-admin-list-card {
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .16);
+}
+
+.org-admin-form input,
+.org-admin-form textarea {
+    border-radius: 10px;
+}

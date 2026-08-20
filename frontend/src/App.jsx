@@ -1,14 +1,9 @@
 
 
 
-
-
-
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { Routes, Route, Navigate, Link } from "react-router-dom";
-import Login from "./Login.jsx";
-import Signup from "./Signup.jsx";
+import { Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
 import Admin from "./Admin.jsx";
 
 const products = [
@@ -114,6 +109,7 @@ const hairCareProducts = [
 ];
 
 const defaultAdminCatalog = {
+  bestsellers: products.map((item) => ({ ...item, type: item.category, description: item.oldPrice || "" })),
   skincare: skinCareProducts.map((item) => ({ ...item, description: item.description || "" })),
   haircare: hairCareProducts.map((item) => ({ ...item, description: item.description || "" })),
   soaps: [
@@ -210,23 +206,60 @@ const normalizePublicImagePath = (value) => {
 };
 
 const categoryPageConfig = {
+  skincare: {
+    number: "01",
+    eyebrow: "BOTANICAL SKIN RITUALS",
+    title: "Skin Care",
+    storageKey: "skincare",
+    intro: "Thoughtful daily care for cleansing, hydration, glow and a beautifully balanced routine.",
+    benefitA: "BOTANICAL CARE",
+    benefitB: "EVERYDAY RITUAL",
+    benefitC: "ORGAVERA QUALITY",
+    heroIcon: "✦",
+  },
+  haircare: {
+    number: "02",
+    eyebrow: "ROOTED HAIR RITUALS",
+    title: "Hair Care",
+    storageKey: "haircare",
+    intro: "Herbal-inspired essentials made for cleansing, nourishment and a polished everyday hair ritual.",
+    benefitA: "HERBAL INSPIRED",
+    benefitB: "NOURISHING CARE",
+    benefitC: "THOUGHTFULLY MADE",
+    heroIcon: "≈",
+  },
   soaps: {
     number: "03",
     eyebrow: "HANDCRAFTED CLEANSING",
     title: "Artisan Soaps",
     storageKey: "soaps",
+    intro: "Handcrafted botanical cleansing bars designed to turn an everyday wash into a richer self-care ritual.",
+    benefitA: "BOTANICAL BLENDS",
+    benefitB: "HANDCRAFTED",
+    benefitC: "SMALL-BATCH CARE",
+    heroIcon: "❧",
   },
   ingredients: {
     number: "04",
     eyebrow: "FORMULATION ESSENTIALS",
     title: "Cosmetic Ingredients",
     storageKey: "ingredients",
+    intro: "Selected formulation essentials for makers who value clean organization, clear product information and reliable sourcing.",
+    benefitA: "FORMULATION READY",
+    benefitB: "CLEAR DETAILS",
+    benefitC: "MAKER FOCUSED",
+    heroIcon: "⚗",
   },
   classes: {
     number: "05",
     eyebrow: "LEARN WITH ORGAVERA",
     title: "Book a Class",
     storageKey: "classes",
+    intro: "Practical learning experiences for skincare, haircare and artisan formulation in a focused, welcoming setting.",
+    benefitA: "PRACTICAL LEARNING",
+    benefitB: "GUIDED SESSIONS",
+    benefitC: "LIMITED SEATS",
+    heroIcon: "⌁",
   },
 };
 
@@ -234,6 +267,9 @@ const categoryPageConfig = {
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const API_CATEGORY_KEYS = {
+  "best-sellers": "bestsellers",
+  "best sellers": "bestsellers",
+  bestsellers: "bestsellers",
   "skin-care": "skincare",
   skincare: "skincare",
   "skin care": "skincare",
@@ -249,7 +285,7 @@ const API_CATEGORY_KEYS = {
 };
 
 const buildCatalogFromApi = (apiProducts) => {
-  const catalog = { skincare: [], haircare: [], soaps: [], ingredients: [], classes: [] };
+  const catalog = { bestsellers: [], skincare: [], haircare: [], soaps: [], ingredients: [], classes: [] };
 
   (Array.isArray(apiProducts) ? apiProducts : []).forEach((item) => {
     const key = API_CATEGORY_KEYS[String(item.category || "").trim().toLowerCase()];
@@ -285,45 +321,11 @@ const fetchCatalogFromApi = async () => {
 function Home() {
   const CART_STORAGE_KEY = "orgaveraCart";
 
-  const getCartKey = (item) =>
-    String(item?.name || item?._id || item?.id || "")
-      .trim()
-      .toLowerCase();
-
   const readSavedCart = () => {
     try {
       const savedCart = window.localStorage.getItem(CART_STORAGE_KEY);
       const parsedCart = savedCart ? JSON.parse(savedCart) : [];
-
-      if (!Array.isArray(parsedCart)) return [];
-
-      // Repair older cart data and merge duplicate entries for the same product.
-      const merged = new Map();
-
-      parsedCart.forEach((item) => {
-        const cartKey = getCartKey(item);
-        if (!cartKey) return;
-
-        const quantity = Math.max(1, Number(item.quantity) || 1);
-
-        if (merged.has(cartKey)) {
-          const existing = merged.get(cartKey);
-          merged.set(cartKey, {
-            ...existing,
-            quantity: existing.quantity + quantity,
-          });
-        } else {
-          merged.set(cartKey, {
-            ...item,
-            cartKey,
-            quantity,
-          });
-        }
-      });
-
-      const repairedCart = Array.from(merged.values());
-      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(repairedCart));
-      return repairedCart;
+      return Array.isArray(parsedCart) ? parsedCart : [];
     } catch (error) {
       console.error("Could not load saved cart:", error);
       return [];
@@ -336,8 +338,40 @@ function Home() {
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
   const [checkoutStep, setCheckoutStep] = useState(1);
 
+  const updateCart = (updater) => {
+    setCart((currentCart) => {
+      const nextCart = typeof updater === "function" ? updater(currentCart) : updater;
+      try {
+        window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(nextCart));
+      } catch (error) {
+        console.error("Could not save cart:", error);
+      }
+      return nextCart;
+    });
+  };
+
+  const getNumericPrice = (price) => Number(String(price).replace(/[^0-9]/g, "")) || 0;
+
   // Load the live product catalog from the MongoDB-backed API.
   const [adminCatalog, setAdminCatalog] = useState(defaultAdminCatalog);
+
+  const bestSellerDeals = adminCatalog.bestsellers.length
+    ? adminCatalog.bestsellers.slice(0, 4).map((item) => {
+      const currentPrice = getNumericPrice(item.price);
+      const originalPrice = getNumericPrice(item.description);
+      const discount =
+        originalPrice > currentPrice && currentPrice > 0
+          ? `-${Math.round(((originalPrice - currentPrice) / originalPrice) * 100)}%`
+          : "DEAL";
+
+      return {
+        ...item,
+        category: item.type || "ORGAVERA",
+        oldPrice: originalPrice > currentPrice ? `Rs. ${originalPrice.toLocaleString()}` : "",
+        discount,
+      };
+    })
+    : products;
 
   useEffect(() => {
     let active = true;
@@ -358,54 +392,36 @@ function Home() {
     };
   }, []);
 
-  const getNumericPrice = (price) => Number(String(price).replace(/[^0-9]/g, "")) || 0;
 
   const addToCart = (product) => {
-    const cartKey = getCartKey(product);
-
     updateCart((currentCart) => {
-      const existing = currentCart.find(
-        (item) => (item.cartKey || getCartKey(item)) === cartKey
-      );
-
+      const existing = currentCart.find((item) => item.id === product.id);
       if (existing) {
         return currentCart.map((item) =>
-          (item.cartKey || getCartKey(item)) === cartKey
-            ? { ...item, cartKey, quantity: (Number(item.quantity) || 1) + 1 }
-            : item
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-
-      return [...currentCart, { ...product, cartKey, quantity: 1 }];
+      return [...currentCart, { ...product, quantity: 1 }];
     });
-
     setNotice(`${product.name} added to cart`);
     setCheckoutStep(1);
     setIsCartOpen(true);
     window.setTimeout(() => setNotice(""), 2200);
   };
 
-  const updateQuantity = (cartKey, change) => {
+  const updateQuantity = (id, change) => {
     updateCart((currentCart) =>
       currentCart
         .map((item) =>
-          (item.cartKey || getCartKey(item)) === cartKey
-            ? {
-              ...item,
-              cartKey,
-              quantity: Math.max(0, (Number(item.quantity) || 1) + change),
-            }
-            : item
+          item.id === id ? { ...item, quantity: Math.max(0, item.quantity + change) } : item
         )
         .filter((item) => item.quantity > 0)
     );
   };
 
-  const removeFromCart = (cartKey) => {
+  const removeFromCart = (id) => {
     updateCart((currentCart) =>
-      currentCart.filter(
-        (item) => (item.cartKey || getCartKey(item)) !== cartKey
-      )
+      currentCart.filter((item) => item.id !== id)
     );
   };
 
@@ -485,25 +501,6 @@ function Home() {
         </nav>
 
         <div className="navbar-actions">
-          <Link
-            to="/login"
-            className="navbar-button login-nav-button"
-            aria-label="Login to your ORGAVERA account"
-          >
-            <span className="login-nav-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" role="img">
-                <circle cx="12" cy="8" r="4"></circle>
-                <path d="M4.5 21c.7-4.4 3.2-6.8 7.5-6.8s6.8 2.4 7.5 6.8"></path>
-              </svg>
-            </span>
-
-            <span className="login-nav-copy">
-              <small>MY ACCOUNT</small>
-              <strong>LOGIN</strong>
-            </span>
-
-            <span className="login-nav-arrow" aria-hidden="true">↗</span>
-          </Link>
 
           <Link
             to="/signup"
@@ -582,93 +579,84 @@ function Home() {
 
         {/* ================= SHOP BY CATEGORY ================= */}
 
-        <section className="org-category-section" aria-label="Shop by category">
-          <div className="org-category-shell">
-            <div className="org-category-head">
-              <div>
-                <p className="org-category-kicker">SHOP BY CATEGORY</p>
-                <h2>Choose your <em>ORGAVERA ritual.</em></h2>
+        <section className="home-category-showcase home-category-luxury" id="shop-categories" aria-label="Shop ORGAVERA by category">
+          <div className="home-category-shell">
+            <div className="home-category-section-head reveal show">
+              <p>CURATED ORGAVERA COLLECTIONS</p>
+              <div className="home-category-title-row">
+                <span></span><h3>Shop by Category</h3><span></span>
               </div>
-              <p className="org-category-intro">
-                Explore our collections and jump straight to the products,
-                ingredients or learning experience you are looking for.
-              </p>
+              <small>Choose a category and explore products made for your routine.</small>
             </div>
 
-            <div className="org-category-grid">
-              <a href="#hair-care" className="org-category-card">
-                <div className="org-category-icon" aria-hidden="true">
-                  <svg viewBox="0 0 32 32">
-                    <path d="M9 26c7-2 12-8 14-18M12 6c5 2 8 6 8 11M8 12c4 1 7 4 9 8" />
-                  </svg>
+            <div className="home-category-grid home-category-grid-five" id="category-grid">
+              <Link to="/collection/skin-care" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11Z" /><path d="M9 10h6M12 7v6" /></svg>
                 </div>
-                <div className="org-category-copy">
-                  <span>01 · HAIR RITUALS</span>
-                  <strong>Hair Care</strong>
-                  <small>Oil · Shampoo · Conditioner</small>
+                <div className="home-category-card-body">
+                  <h3>Skin Care</h3>
+                  <p>Nourish, protect &amp; glow with our natural skincare.</p>
+                  <span className="home-category-card-count">{adminCatalog.skincare.length || "Explore"} products</span>
+                  <span className="home-category-card-button">Shop Now <b>→</b></span>
                 </div>
-                <b className="org-category-arrow">↗</b>
-              </a>
+              </Link>
 
-              <a href="#skin-care" className="org-category-card">
-                <div className="org-category-icon" aria-hidden="true">
-                  <svg viewBox="0 0 32 32">
-                    <circle cx="16" cy="16" r="9" />
-                    <path d="M12 14c2-3 6-3 8 0M13 20c2 2 4 2 6 0" />
-                  </svg>
+              <Link to="/collection/hair-care" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M8 4c5 0 8 4 8 8 0 4-2 7-5 8" /><path d="M10 4c-2 3-2 6 0 9 1 2 1 4 0 7" /><path d="M6 5c-1 4 0 7 3 9" /></svg>
                 </div>
-                <div className="org-category-copy">
-                  <span>02 · SKIN RITUALS</span>
-                  <strong>Skin Care</strong>
-                  <small>Serums · Masks · Daily Care</small>
+                <div className="home-category-card-body">
+                  <h3>Hair Care</h3>
+                  <p>Strengthen, repair &amp; refresh with herbal care.</p>
+                  <span className="home-category-card-count">{adminCatalog.haircare.length || "Explore"} products</span>
+                  <span className="home-category-card-button">Shop Now <b>→</b></span>
                 </div>
-                <b className="org-category-arrow">↗</b>
-              </a>
+              </Link>
 
-              <a href="#soaps-products" className="org-category-card">
-                <div className="org-category-icon" aria-hidden="true">
-                  <svg viewBox="0 0 32 32">
-                    <rect x="7" y="10" width="18" height="13" rx="5" />
-                    <path d="M12 8c1-3 7-3 8 0M11 16h10" />
-                  </svg>
+              <Link to="/collection/soaps" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M5 15c3-8 8-10 14-10-1 6-4 11-10 12" /><path d="M8 18c3-3 6-6 10-8" /></svg>
                 </div>
-                <div className="org-category-copy">
-                  <span>03 · BOTANICAL CLEANSING</span>
-                  <strong>Artisan Soaps</strong>
-                  <small>Handcrafted · Herbal · Small Batch</small>
+                <div className="home-category-card-body">
+                  <h3>Artisan Soaps</h3>
+                  <p>Handcrafted soaps made with pure botanical ingredients.</p>
+                  <span className="home-category-card-count">{adminCatalog.soaps.length || "Explore"} products</span>
+                  <span className="home-category-card-button">Shop Now <b>→</b></span>
                 </div>
-                <b className="org-category-arrow">↗</b>
-              </a>
+              </Link>
 
-              <a href="#ingredients-products" className="org-category-card">
-                <div className="org-category-icon" aria-hidden="true">
-                  <svg viewBox="0 0 32 32">
-                    <path d="M12 5v7L7 23c-1 2 1 4 3 4h12c2 0 4-2 3-4l-5-11V5" />
-                    <path d="M11 19h10M10 8h12" />
-                  </svg>
+              <Link to="/collection/cosmetic-ingredients" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3" /><path d="M8 15h8" /></svg>
                 </div>
-                <div className="org-category-copy">
-                  <span>04 · FORMULATION ESSENTIALS</span>
-                  <strong>Cosmetic Ingredients</strong>
-                  <small>Actives · Bases · Formulation Supplies</small>
+                <div className="home-category-card-body">
+                  <h3>Cosmetic Ingredients</h3>
+                  <p>High quality ingredients for your formulations.</p>
+                  <span className="home-category-card-count">{adminCatalog.ingredients.length || "Explore"} products</span>
+                  <span className="home-category-card-button">Shop Now <b>→</b></span>
                 </div>
-                <b className="org-category-arrow">↗</b>
-              </a>
+              </Link>
 
-              <a href="#classes-products" className="org-category-card org-category-card-featured">
-                <div className="org-category-icon" aria-hidden="true">
-                  <svg viewBox="0 0 32 32">
-                    <path d="M7 8h8c3 0 5 2 5 5v12h-8c-3 0-5-2-5-5V8Z" />
-                    <path d="M25 8h-5v17h5V8ZM11 13h5M11 17h5" />
-                  </svg>
+              <Link to="/classes" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m3 10 9-5 9 5-9 5-9-5Z" /><path d="M7 12v5c3 2 7 2 10 0v-5" /></svg>
                 </div>
-                <div className="org-category-copy">
-                  <span>05 · LEARN WITH ORGAVERA</span>
-                  <strong>Book a Class</strong>
-                  <small>Hands-on Botanical Formulation Sessions</small>
+                <div className="home-category-card-body">
+                  <h3>Book a Class</h3>
+                  <p>Learn, create &amp; grow with our formulation classes.</p>
+                  <span className="home-category-card-count">{adminCatalog.classes.length || "Explore"} classes</span>
+                  <span className="home-category-card-button">View Classes <b>→</b></span>
                 </div>
-                <b className="org-category-arrow">↗</b>
-              </a>
+              </Link>
+            </div>
+
+            <div className="home-category-trust-strip reveal show">
+              <div><span>❧</span><p><b>100% Natural</b><small>Pure &amp; Safe</small></p></div>
+              <div><span>♨</span><p><b>Handcrafted</b><small>Made with Care</small></p></div>
+              <div><span>⚗</span><p><b>Chemical Free</b><small>No Harmful Additives</small></p></div>
+              <div><span>♧</span><p><b>Ethical Sourcing</b><small>Responsible &amp; Sustainable</small></p></div>
+              <div><span>♡</span><p><b>Cruelty Free</b><small>Not Tested on Animals</small></p></div>
             </div>
           </div>
         </section>
@@ -719,7 +707,7 @@ function Home() {
           </div>
 
           <div className="top-sellers-grid">
-            {products.map((product) => (
+            {bestSellerDeals.map((product) => (
               <article className="top-seller-card reveal" key={product.id}>
                 <div className="top-seller-image-wrap">
                   <span className="discount-badge">{product.discount}</span>
@@ -728,7 +716,7 @@ function Home() {
                     src={product.image}
                     alt={`${product.name} by ORGAVERA`}
                     className={`top-seller-image top-seller-image-${product.id}`}
-                    loading={product.id <= 2 ? "eager" : "lazy"}
+                    loading="lazy"
                     decoding="async"
                     draggable="false"
                   />
@@ -847,21 +835,43 @@ function Home() {
         {/* ================= PRODUCTS ================= */}
 
         <section className="products-section" id="products">
-          <div className="products-heading reveal">
-            <div>
-              <p className="section-label">OUR COLLECTION</p>
+          <div className="products-heading products-heading-premium reveal">
+            <div className="products-heading-copy">
+              <div className="products-heading-kicker">
+                <span className="products-heading-kicker-line"></span>
+                <p className="section-label">THE ORGAVERA COLLECTION</p>
+              </div>
 
               <h2>
-                Everyday
+                Care, curated
                 <br />
-                <em>rituals.</em>
+                <em>for your ritual.</em>
               </h2>
+
+              <p className="products-heading-subcopy">
+                Thoughtfully made skincare, haircare and botanical essentials —
+                easy to explore, simple to choose and crafted for everyday care.
+              </p>
+
+              <div className="products-heading-points" aria-label="ORGAVERA collection highlights">
+                <span><b>✦</b> Botanical care</span>
+                <span><b>✦</b> Small-batch made</span>
+                <span><b>✦</b> Easy WhatsApp ordering</span>
+              </div>
             </div>
 
-            <p>
-              Explore our complete collection arranged into simple skincare
-              and haircare rows.
-            </p>
+            <div className="products-heading-side">
+              <span className="products-heading-side-label">EXPLORE BY CATEGORY</span>
+              <div className="products-heading-category-links">
+                <a href="#skin-care">Skin Care <b>↘</b></a>
+                <a href="#hair-care">Hair Care <b>↘</b></a>
+                <a href="#soaps-products">Soaps <b>↘</b></a>
+                <a href="#ingredients-products">Ingredients <b>↘</b></a>
+              </div>
+              <a href="#skin-care" className="products-heading-explore">
+                Start exploring <span>↘</span>
+              </a>
+            </div>
           </div>
 
           <div className="collection-group reveal" id="skin-care">
@@ -871,11 +881,13 @@ function Home() {
                 <p>SKIN CARE</p>
               </div>
 
-              <small>{adminCatalog.skincare.length} {adminCatalog.skincare.length === 1 ? "product" : "products"}</small>
+              <Link to="/collection/skin-care" className="collection-row-see-more">
+                See More <b>↗</b>
+              </Link>
             </div>
 
-            <div className="collection-scroll">
-              {adminCatalog.skincare.map((product) => (
+            <div className="collection-scroll collection-scroll-preview">
+              {adminCatalog.skincare.slice(0, 4).map((product) => (
                 <article className="collection-card" key={product.id}>
                   <div className="collection-image-wrap">
                     <img
@@ -923,11 +935,13 @@ function Home() {
                 <p>HAIR CARE</p>
               </div>
 
-              <small>{adminCatalog.haircare.length} {adminCatalog.haircare.length === 1 ? "product" : "products"}</small>
+              <Link to="/collection/hair-care" className="collection-row-see-more">
+                See More <b>↗</b>
+              </Link>
             </div>
 
-            <div className="collection-scroll collection-scroll-hair">
-              {adminCatalog.haircare.map((product) => (
+            <div className="collection-scroll collection-scroll-hair collection-scroll-preview">
+              {adminCatalog.haircare.slice(0, 4).map((product) => (
                 <article className="collection-card" key={product.id}>
                   <div className="collection-image-wrap">
                     <img
@@ -976,18 +990,21 @@ function Home() {
               number: "03",
               title: "Artisan Soaps",
               items: adminCatalog.soaps,
+              moreTo: "/collection/soaps",
             },
             {
               id: "ingredients-products",
               number: "04",
               title: "Cosmetic Ingredients",
               items: adminCatalog.ingredients,
+              moreTo: "/collection/cosmetic-ingredients",
             },
             {
               id: "classes-products",
               number: "05",
               title: "Book a Class",
               items: adminCatalog.classes,
+              moreTo: "/classes",
             },
           ].map((category) => (
             <div
@@ -1001,22 +1018,14 @@ function Home() {
                   <span>{category.number}</span>
                   <p>{category.title.toUpperCase()}</p>
                 </div>
-                <small>
-                  {category.items.length} {category.items.length === 1 ? "listing" : "listings"}
-                </small>
+                <Link to={category.moreTo} className="collection-row-see-more">
+                  See More <b>↗</b>
+                </Link>
               </div>
 
-              <div
-                className="collection-scroll"
-                style={{
-                  overflow: "visible",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                  gap: "22px",
-                }}
-              >
-                {category.items.map((item) => (
-                  <article className="collection-card" key={item.cartKey || getCartKey(item)} style={{ minWidth: 0 }}>
+              <div className="collection-scroll collection-scroll-preview">
+                {category.items.slice(0, 4).map((item) => (
+                  <article className="collection-card" key={item.id} style={{ minWidth: 0 }}>
                     <div className="collection-image-wrap">
                       <img
                         src={normalizePublicImagePath(item.image)}
@@ -1317,20 +1326,20 @@ function Home() {
 
                   <div className="cart-items expanded-cart-items">
                     {cart.map((item) => (
-                      <article className="cart-item premium-cart-item" key={item.cartKey || getCartKey(item)}>
+                      <article className="cart-item premium-cart-item" key={item.id}>
                         <div className="cart-item-image-wrap"><img src={item.image} alt={item.name} /></div>
                         <div className="cart-item-copy">
                           <small>{item.category || item.type || "ORGAVERA Care"}</small>
                           <h4>{item.name}</h4>
                           <p>{item.price} each</p>
                           <div className="cart-quantity" aria-label={`Quantity of ${item.name}`}>
-                            <button type="button" onClick={() => updateQuantity(item.cartKey || getCartKey(item), -1)}>−</button>
+                            <button type="button" onClick={() => updateQuantity(item.id, -1)}>−</button>
                             <span>{item.quantity}</span>
-                            <button type="button" onClick={() => updateQuantity(item.cartKey || getCartKey(item), 1)}>+</button>
+                            <button type="button" onClick={() => updateQuantity(item.id, 1)}>+</button>
                           </div>
                         </div>
                         <strong className="cart-line-total">Rs. {getNumericPrice(item.price) * item.quantity}</strong>
-                        <button type="button" className="cart-remove" onClick={() => removeFromCart(item.cartKey || getCartKey(item))}>×</button>
+                        <button type="button" className="cart-remove" onClick={() => removeFromCart(item.id)}>×</button>
                       </article>
                     ))}
                   </div>
@@ -1509,6 +1518,15 @@ function Home() {
               <a href="#ingredients">Ingredients <span>↗</span></a>
             </div>
 
+            <div className="footer-links-group footer-category-links">
+              <p>CATEGORIES</p>
+              <Link to="/collection/skin-care">Skin Care <span>↗</span></Link>
+              <Link to="/collection/hair-care">Hair Care <span>↗</span></Link>
+              <Link to="/collection/soaps">Artisan Soaps <span>↗</span></Link>
+              <Link to="/collection/cosmetic-ingredients">Cosmetic Ingredients <span>↗</span></Link>
+              <Link to="/classes">Book a Class <span>↗</span></Link>
+            </div>
+
             <div className="footer-links-group">
               <p>CONTACT</p>
               <a href="https://wa.me/923709301194" target="_blank" rel="noreferrer">
@@ -1568,8 +1586,38 @@ function Home() {
 
 function CategoryCollectionPage({ categoryKey }) {
   const config = categoryPageConfig[categoryKey];
-
+  const CART_STORAGE_KEY = "orgaveraCart";
   const [catalog, setCatalog] = useState(defaultAdminCatalog);
+  const [query, setQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState("featured");
+  const [selectedVariants, setSelectedVariants] = useState({});
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
+  const [cart, setCart] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem(CART_STORAGE_KEY);
+      const parsed = stored ? JSON.parse(stored) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error("Could not load saved cart:", error);
+      return [];
+    }
+  });
+
+  const getNumericPrice = (price) => Number(String(price ?? "").replace(/[^0-9.]/g, "")) || 0;
+
+  const updateCart = (updater) => {
+    setCart((currentCart) => {
+      const nextCart = typeof updater === "function" ? updater(currentCart) : updater;
+      try {
+        window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(nextCart));
+      } catch (error) {
+        console.error("Could not save cart:", error);
+      }
+      return nextCart;
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -1584,21 +1632,135 @@ function CategoryCollectionPage({ categoryKey }) {
     };
 
     refreshCatalog();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
-  if (!config) {
-    return <Navigate to="/" replace />;
-  }
+  if (!config) return <Navigate to="/" replace />;
 
   const items = catalog[config.storageKey] || [];
+  const filteredItems = items
+    .filter((item) => [item.name, item.type, item.description].join(" ").toLowerCase().includes(query.trim().toLowerCase()))
+    .sort((a, b) => {
+      const priceA = getNumericPrice(a.price);
+      const priceB = getNumericPrice(b.price);
+      if (sortOrder === "price-low") return priceA - priceB;
+      if (sortOrder === "price-high") return priceB - priceA;
+      if (sortOrder === "name") return String(a.name).localeCompare(String(b.name));
+      return 0;
+    });
+
+  const getItemVariants = (item) =>
+    Array.isArray(item.variants)
+      ? item.variants.filter((variant) => String(variant?.label || variant?.size || "").trim())
+      : [];
+
+  const getSelectedVariant = (item) => {
+    const variants = getItemVariants(item);
+    if (!variants.length) return null;
+    const selectedLabel = selectedVariants[item.id] || String(variants[0].label || variants[0].size || "");
+    return variants.find((variant) => String(variant.label || variant.size || "") === selectedLabel) || variants[0];
+  };
+
+  const getDisplayPrice = (item) => {
+    const variant = getSelectedVariant(item);
+    const numeric = variant ? getNumericPrice(variant.price) : getNumericPrice(item.price);
+    if (numeric > 0) return `Rs. ${numeric.toLocaleString()}`;
+    return String(item.price || "Ask for price");
+  };
+
+  const addCategoryItemToCart = (item) => {
+    const variant = getSelectedVariant(item);
+    const variantLabel = variant ? String(variant.label || variant.size || "").trim() : "";
+    const unitPrice = variant ? getNumericPrice(variant.price) : getNumericPrice(item.price);
+    const cartId = variantLabel ? `${item.id}::${variantLabel}` : item.id;
+    const priceLabel = unitPrice > 0 ? `Rs. ${unitPrice}` : String(item.price || "Ask for price");
+
+    updateCart((currentCart) => {
+      const existing = currentCart.find((cartItem) => cartItem.id === cartId);
+      if (existing) {
+        return currentCart.map((cartItem) =>
+          cartItem.id === cartId ? { ...cartItem, quantity: cartItem.quantity + 1 } : cartItem
+        );
+      }
+
+      return [
+        ...currentCart,
+        {
+          ...item,
+          id: cartId,
+          originalId: item.id,
+          variantLabel,
+          unitPrice,
+          price: priceLabel,
+          image: normalizePublicImagePath(item.image),
+          quantity: 1,
+        },
+      ];
+    });
+
+    setNotice(`${item.name}${variantLabel ? ` (${variantLabel})` : ""} added to cart`);
+    setIsCartOpen(true);
+    window.setTimeout(() => setNotice(""), 2200);
+  };
+
+  const updateQuantity = (id, change) => {
+    updateCart((currentCart) =>
+      currentCart
+        .map((item) => item.id === id ? { ...item, quantity: Math.max(0, item.quantity + change) } : item)
+        .filter((item) => item.quantity > 0)
+    );
+  };
+
+  const removeFromCart = (id) => {
+    updateCart((currentCart) => currentCart.filter((item) => item.id !== id));
+  };
+
+  const cartCount = cart.reduce((total, item) => total + Number(item.quantity || 0), 0);
+  const cartTotal = cart.reduce((total, item) => {
+    const unit = Number(item.unitPrice || getNumericPrice(item.price));
+    return total + unit * Number(item.quantity || 0);
+  }, 0);
+  const hasUnpricedItems = cart.some((item) => Number(item.unitPrice || getNumericPrice(item.price)) <= 0);
+
+  const placeCategoryCartOrder = (number = "923709301194") => {
+    if (!cart.length) {
+      setNotice("Your cart is empty");
+      window.setTimeout(() => setNotice(""), 2200);
+      return;
+    }
+
+    const productLines = cart.map((item, index) => {
+      const unit = Number(item.unitPrice || getNumericPrice(item.price));
+      const qty = Number(item.quantity || 1);
+      const variant = item.variantLabel ? ` — ${item.variantLabel}` : "";
+      const priceText = unit > 0
+        ? `Rs. ${unit.toLocaleString()} × ${qty} = Rs. ${(unit * qty).toLocaleString()}`
+        : `Price to be confirmed × ${qty}`;
+      return `${index + 1}. ${item.name}${variant}\n   ${priceText}`;
+    }).join("\n\n");
+
+    const customerLines = [
+      customer.name.trim() ? `Customer: ${customer.name.trim()}` : "",
+      customer.phone.trim() ? `Phone: ${customer.phone.trim()}` : "",
+      customer.address.trim() ? `Address: ${customer.address.trim()}` : "",
+    ].filter(Boolean).join("\n");
+
+    const totalLine = cartTotal > 0 ? `Known Total: Rs. ${cartTotal.toLocaleString()}` : "Total: Please confirm prices";
+    const priceNote = hasUnpricedItems ? "\nNote: One or more item prices need confirmation." : "";
+    const message = `🌿 ORGAVERA ORDER\n\n${customerLines ? `${customerLines}\n\n` : ""}ORDER ITEMS\n${productLines}\n\n${totalLine}${priceNote}\n\nPlease confirm availability, delivery charges and final order total.`;
+
+    const encoded = encodeURIComponent(message);
+    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    const url = mobile
+      ? `https://wa.me/${number}?text=${encoded}`
+      : `https://web.whatsapp.com/send?phone=${number}&text=${encoded}`;
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
-    <div className="website">
-      <header className="navbar">
+    <div className="website premium-collection-page">
+      <header className="navbar premium-collection-nav">
         <Link to="/" className="brand">
           <img src="/orgavera-logo.png" alt="ORGAVERA logo" />
           <div className="brand-name">
@@ -1615,151 +1777,219 @@ function CategoryCollectionPage({ categoryKey }) {
           <Link to="/#contact">Contact</Link>
         </nav>
 
-        <div className="navbar-actions">
-          <Link to="/login" className="navbar-button login-nav-button">
-            Login
-            <span>↗</span>
-          </Link>
-          <Link to="/signup" className="navbar-button signup-nav-button">
-            Sign Up
-            <span>↗</span>
-          </Link>
-        </div>
+        <button type="button" className="navbar-button cart-nav-button category-page-cart-button" onClick={() => setIsCartOpen(true)}>
+          Cart <span className="cart-count">{cartCount}</span>
+        </button>
       </header>
 
-      <main>
-        <section
-          className="products-section"
-          style={{
-            minHeight: "100vh",
-            paddingTop: "150px",
-            paddingBottom: "100px",
-          }}
-        >
-          <div className="products-heading reveal show">
-            <div>
-              <p className="section-label">
-                {config.number} / {config.eyebrow}
-              </p>
-
-              <h2>
-                {config.title.split(" ")[0]}
-                <br />
-                <em>{config.title.split(" ").slice(1).join(" ")}.</em>
-              </h2>
+      <main className="premium-collection-main">
+        <section className="premium-catalog-section premium-catalog-first" id="collection-products">
+          <div className="premium-catalog-toolbar">
+            <div className="premium-catalog-title premium-catalog-title-featured">
+              <span className="premium-title-spark">✦</span>
+              <div>
+                <small>ORGAVERA · {config.number}</small>
+                <h1>{config.title}</h1>
+                <p>{config.intro}</p>
+              </div>
             </div>
 
-            <p>
-              Manage these listings from the ORGAVERA admin panel. Product image,
-              details and price updates will appear here automatically in this
-              browser.
-            </p>
+            <div className="premium-catalog-controls">
+              <label className="premium-search-box">
+                <span>⌕</span>
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search products"
+                  aria-label={`Search ${config.title}`}
+                />
+              </label>
+              <span className="premium-listing-count">{filteredItems.length} {filteredItems.length === 1 ? "listing" : "listings"}</span>
+              <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} aria-label="Sort products">
+                <option value="featured">Featured</option>
+                <option value="name">Name A–Z</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+              </select>
+            </div>
           </div>
 
-          <div className="collection-group reveal show">
-            <div className="collection-row-heading">
-              <div>
-                <span>{config.number}</span>
-                <p>{config.title.toUpperCase()}</p>
-              </div>
+          <div className="premium-product-grid">
+            {filteredItems.map((item, index) => {
+              const variants = getItemVariants(item);
+              const selectedVariant = getSelectedVariant(item);
+              const selectedLabel = selectedVariant ? String(selectedVariant.label || selectedVariant.size || "") : "";
 
-              <small>
-                {items.length} {items.length === 1 ? "listing" : "listings"}
-              </small>
-            </div>
-
-            <div
-              className="collection-scroll"
-              style={{
-                overflow: "visible",
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                gap: "22px",
-              }}
-            >
-              {items.map((item) => (
-                <article
-                  className="collection-card"
-                  key={item.cartKey || getCartKey(item)}
-                  style={{ minWidth: 0 }}
-                >
-                  <div className="collection-image-wrap">
+              return (
+                <article className="premium-product-card" key={item.id}>
+                  <div className="premium-product-image-wrap">
+                    <span className="premium-product-badge">{index === 0 ? "FEATURED" : "ORGAVERA"}</span>
                     <img
                       src={normalizePublicImagePath(item.image)}
                       alt={`${item.name} by ORGAVERA`}
-                      className="collection-image"
+                      className="premium-product-image"
                       loading="lazy"
                       decoding="async"
                       onError={(event) => {
                         event.currentTarget.onerror = null;
                         event.currentTarget.src = "/orgavera-logo.png";
-                        event.currentTarget.classList.add(
-                          "collection-image-fallback"
-                        );
+                        event.currentTarget.classList.add("collection-image-fallback");
                       }}
                     />
+                    <button
+                      type="button"
+                      className="premium-card-action"
+                      aria-label={`Add ${item.name} to cart`}
+                      onClick={() => addCategoryItemToCart(item)}
+                    >
+                      +
+                    </button>
                   </div>
 
-                  <div className="collection-card-info">
-                    <p>{item.type}</p>
+                  <div className="premium-product-info">
+                    <p>{item.type || "ORGAVERA"}</p>
                     <h3>{item.name}</h3>
+                    {item.description && <span className="premium-product-description">{item.description}</span>}
 
-                    {item.description && (
-                      <p
-                        style={{
-                          marginTop: "14px",
-                          marginBottom: "16px",
-                          textTransform: "none",
-                          letterSpacing: "0",
-                          lineHeight: "1.7",
-                          opacity: 0.72,
-                        }}
-                      >
-                        {item.description}
-                      </p>
+                    {variants.length > 0 && (
+                      <label className="premium-variant-picker">
+                        <span>Select size</span>
+                        <select
+                          value={selectedLabel}
+                          onChange={(event) => setSelectedVariants((current) => ({ ...current, [item.id]: event.target.value }))}
+                        >
+                          {variants.map((variant) => {
+                            const label = String(variant.label || variant.size || "");
+                            const price = getNumericPrice(variant.price);
+                            return <option key={label} value={label}>{label}{price > 0 ? ` — Rs. ${price.toLocaleString()}` : ""}</option>;
+                          })}
+                        </select>
+                      </label>
                     )}
 
-                    <strong>{item.price}</strong>
-
-                    <a
-                      href="https://wa.me/923709301194"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-link"
-                      style={{
-                        display: "inline-flex",
-                        marginTop: "20px",
-                      }}
-                    >
-                      {categoryKey === "classes"
-                        ? "Ask / Book on WhatsApp →"
-                        : "Ask / Order on WhatsApp →"}
-                    </a>
+                    <div className="premium-product-bottom">
+                      <strong>{getDisplayPrice(item)}</strong>
+                      <button type="button" className="premium-add-to-cart-button" onClick={() => addCategoryItemToCart(item)}>
+                        {categoryKey === "classes" ? "Add Booking" : "Add to Cart"} →
+                      </button>
+                    </div>
                   </div>
                 </article>
-              ))}
-            </div>
-
-            {!items.length && (
-              <div
-                style={{
-                  marginTop: "25px",
-                  padding: "40px",
-                  border: "1px solid rgba(210,168,74,.22)",
-                  textAlign: "center",
-                }}
-              >
-                <p>No listings are available in this collection yet.</p>
-              </div>
-            )}
+              );
+            })}
           </div>
+
+          {!filteredItems.length && (
+            <div className="premium-empty-state">
+              <img src="/orgavera-logo.png" alt="ORGAVERA" />
+              <h3>{query ? "No matching products" : "Collection coming soon"}</h3>
+              <p>{query ? "Try another search term." : "New ORGAVERA listings will appear here as soon as they are added from the admin panel."}</p>
+            </div>
+          )}
+        </section>
+
+        <section className="premium-collection-cta">
+          <p>NEED HELP CHOOSING?</p>
+          <h2>Talk to ORGAVERA <em>directly.</em></h2>
+          <a href="https://wa.me/923709301194" target="_blank" rel="noreferrer">Chat on WhatsApp ↗</a>
         </section>
       </main>
+
+      {notice && <div className="cart-notice" role="status">{notice}</div>}
+      <div className={`cart-backdrop ${isCartOpen ? "show" : ""}`} onClick={() => setIsCartOpen(false)} aria-hidden={!isCartOpen}></div>
+
+      <aside className={`cart-drawer ${isCartOpen ? "open" : ""}`} aria-label="Shopping cart">
+        <div className="cart-drawer-header">
+          <div className="cart-title-wrap">
+            <span>YOUR ORGAVERA BAG</span>
+            <h3>Order Summary</h3>
+            <p>{cartCount} {cartCount === 1 ? "product" : "products"} selected</p>
+          </div>
+          <button type="button" onClick={() => setIsCartOpen(false)} aria-label="Close cart">×</button>
+        </div>
+
+        <div className="cart-drawer-body premium-step-body">
+          {!cart.length ? (
+            <div className="empty-cart">
+              <div className="empty-cart-icon">❧</div>
+              <h4>Your cart is empty</h4>
+              <p>Select products first. Your complete price list will appear here automatically.</p>
+              <button type="button" onClick={() => setIsCartOpen(false)}>Continue Shopping</button>
+            </div>
+          ) : (
+            <section className="checkout-step checkout-review-step">
+              <div className="cart-section-title large-summary-title">
+                <div><span>01</span><h4>Selected Products</h4></div>
+                <small>{cartCount} {cartCount === 1 ? "item" : "items"}</small>
+              </div>
+
+              <div className="cart-items expanded-cart-items">
+                {cart.map((item) => {
+                  const unit = Number(item.unitPrice || getNumericPrice(item.price));
+                  return (
+                    <article className="cart-item premium-cart-item" key={item.id}>
+                      <div className="cart-item-image-wrap"><img src={normalizePublicImagePath(item.image)} alt={item.name} /></div>
+                      <div className="cart-item-copy">
+                        <small>{item.variantLabel || item.category || item.type || "ORGAVERA"}</small>
+                        <h4>{item.name}</h4>
+                        <p>{unit > 0 ? `Rs. ${unit.toLocaleString()} each` : "Price to be confirmed"}</p>
+                        <div className="cart-quantity" aria-label={`Quantity of ${item.name}`}>
+                          <button type="button" onClick={() => updateQuantity(item.id, -1)}>−</button>
+                          <span>{item.quantity}</span>
+                          <button type="button" onClick={() => updateQuantity(item.id, 1)}>+</button>
+                        </div>
+                      </div>
+                      <strong className="cart-line-total">{unit > 0 ? `Rs. ${(unit * item.quantity).toLocaleString()}` : "Ask price"}</strong>
+                      <button type="button" className="cart-remove" onClick={() => removeFromCart(item.id)}>×</button>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="review-total-card category-cart-total-card">
+                <div><span>Known subtotal</span><b>Rs. {cartTotal.toLocaleString()}</b></div>
+                {hasUnpricedItems && <div><span>Unpriced items</span><b>Confirm on WhatsApp</b></div>}
+                <div><span>Delivery charges</span><b>Confirmed on WhatsApp</b></div>
+                <div className="review-grand-total"><span>Price List Total</span><strong>Rs. {cartTotal.toLocaleString()}</strong></div>
+              </div>
+
+              <div className="checkout-form premium-checkout-form category-quick-checkout">
+                <label className="checkout-field"><span className="checkout-field-icon">♙</span><div><small>Name (optional)</small><input type="text" placeholder="Customer name" value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} /></div></label>
+                <label className="checkout-field"><span className="checkout-field-icon">☎</span><div><small>Phone (optional)</small><input type="tel" placeholder="03XX XXXXXXX" value={customer.phone} onChange={(event) => setCustomer({ ...customer, phone: event.target.value })} /></div></label>
+                <label className="checkout-field checkout-address-field"><span className="checkout-field-icon">⌖</span><div><small>Address (optional)</small><textarea placeholder="House, street, area and city" value={customer.address} onChange={(event) => setCustomer({ ...customer, address: event.target.value })}></textarea></div></label>
+              </div>
+
+              <button type="button" className="checkout-next-button category-direct-order-button" onClick={() => placeCategoryCartOrder("923709301194")}>
+                Place Complete Order on WhatsApp <span>→</span>
+              </button>
+              <p className="whatsapp-order-note category-order-note">Your selected products, quantities and full price list will be inserted into the WhatsApp message automatically.</p>
+            </section>
+          )}
+        </div>
+      </aside>
+
+      <footer className="premium-category-footer">
+        <Link to="/" className="premium-footer-brand">
+          <img src="/orgavera-logo.png" alt="ORGAVERA" />
+          <div><strong>ORGAVERA</strong><span>Pure · Natural · Organic</span></div>
+        </Link>
+        <span>BOTANICAL BEAUTY · THOUGHTFULLY MADE</span>
+        <span>RAWALPINDI · PAKISTAN</span>
+      </footer>
     </div>
   );
 }
 
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
 
 const ADMIN_PASSWORD = "hamna2722";
 const ADMIN_SESSION_KEY = "orgaveraAdminAuthorized";
@@ -1932,25 +2162,34 @@ function ProtectedAdmin() {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/admin" element={<ProtectedAdmin />} />
-      <Route
-        path="/collection/soaps"
-        element={<CategoryCollectionPage categoryKey="soaps" />}
-      />
-      <Route
-        path="/collection/cosmetic-ingredients"
-        element={<CategoryCollectionPage categoryKey="ingredients" />}
-      />
-      <Route
-        path="/classes"
-        element={<CategoryCollectionPage categoryKey="classes" />}
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/admin" element={<ProtectedAdmin />} />
+        <Route
+          path="/collection/skin-care"
+          element={<CategoryCollectionPage categoryKey="skincare" />}
+        />
+        <Route
+          path="/collection/hair-care"
+          element={<CategoryCollectionPage categoryKey="haircare" />}
+        />
+        <Route
+          path="/collection/soaps"
+          element={<CategoryCollectionPage categoryKey="soaps" />}
+        />
+        <Route
+          path="/collection/cosmetic-ingredients"
+          element={<CategoryCollectionPage categoryKey="ingredients" />}
+        />
+        <Route
+          path="/classes"
+          element={<CategoryCollectionPage categoryKey="classes" />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 
