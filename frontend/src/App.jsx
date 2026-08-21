@@ -318,6 +318,768 @@ const fetchCatalogFromApi = async () => {
   return buildCatalogFromApi(result.data);
 };
 
+
+
+function ProductDetailModal({ product, onClose, onAddToCart }) {
+  const [selectedLabel, setSelectedLabel] = useState("");
+  const [quantity, setQuantity] = useState(1);
+
+  const getNumericPrice = (price) =>
+    Number(String(price ?? "").replace(/[^0-9]/g, "")) || 0;
+
+  const variants = Array.isArray(product?.variants)
+    ? product.variants
+      .map((variant) => ({
+        ...variant,
+        label: String(variant?.label || variant?.size || "").trim(),
+        price: getNumericPrice(variant?.price),
+        stock: Number(variant?.stock ?? 0),
+      }))
+      .filter((variant) => variant.label)
+    : [];
+
+  useEffect(() => {
+    if (!product) return;
+    const firstLabel = variants.length
+      ? String(variants[0].label || variants[0].size || "").trim()
+      : "";
+    setSelectedLabel(firstLabel);
+    setQuantity(1);
+  }, [product?.id]);
+
+  if (!product) return null;
+
+  const selectedVariant =
+    variants.find(
+      (variant) =>
+        String(variant.label || variant.size || "").trim() === selectedLabel
+    ) || variants[0] || null;
+
+  const unitPrice = selectedVariant
+    ? getNumericPrice(selectedVariant.price)
+    : getNumericPrice(product.price);
+
+  const totalPrice = unitPrice * quantity;
+  const oldPrice = getNumericPrice(product.oldPrice || product.description);
+  const discount =
+    oldPrice > unitPrice && unitPrice > 0
+      ? Math.round(((oldPrice - unitPrice) / oldPrice) * 100)
+      : 0;
+
+  const categoryText = String(product.category || product.type || "").toLowerCase();
+  const isHair = categoryText.includes("hair");
+  const isSkin = categoryText.includes("skin") || categoryText.includes("face");
+  const isSoap = categoryText.includes("soap");
+
+  const benefits = isHair
+    ? [
+      "Helps nourish hair from root to tip",
+      "Supports softer, smoother-looking hair",
+      "Helps reduce the look of dryness and frizz",
+      "Adds a healthy-looking natural shine",
+    ]
+    : isSkin
+      ? [
+        "Made for a simple everyday skincare routine",
+        "Helps support a fresh, cared-for look",
+        "Thoughtfully formulated for regular use",
+        "Leaves skin feeling clean and comfortable",
+      ]
+      : isSoap
+        ? [
+          "Handcrafted for everyday cleansing",
+          "Creates a refreshing self-care ritual",
+          "Made with a botanical-inspired approach",
+          "Leaves skin feeling clean and refreshed",
+        ]
+        : [
+          "Thoughtfully made by ORGAVERA",
+          "Designed for everyday use",
+          "Simple, premium product experience",
+          "Carefully selected formulation approach",
+        ];
+
+  const howToUse = isHair
+    ? [
+      "Take the required amount of product.",
+      "Apply gently to hair or scalp as suitable.",
+      "Use consistently as part of your routine.",
+      "Follow with your preferred ORGAVERA haircare step.",
+    ]
+    : isSkin
+      ? [
+        "Start with clean skin.",
+        "Apply a suitable amount gently.",
+        "Use as directed for your routine.",
+        "Follow with your preferred skincare steps.",
+      ]
+      : [
+        "Use the required amount.",
+        "Apply as suitable for the product.",
+        "Use consistently for best experience.",
+        "Store in a cool, dry place.",
+      ];
+
+  return (
+    <div
+      className="org-product-modal-backdrop"
+      onClick={onClose}
+      role="presentation"
+    >
+      <style>{`
+        .org-product-modal-backdrop{
+          position:fixed; inset:0; z-index:99999;
+          background:rgba(3,12,6,.78);
+          backdrop-filter:blur(9px);
+          display:flex; align-items:center; justify-content:center;
+          padding:18px;
+        }
+
+        .org-product-modal{
+          width:min(1260px,97vw);
+          max-height:94vh;
+          overflow:auto;
+          background:#fbfaf5;
+          border-radius:26px;
+          box-shadow:0 35px 100px rgba(0,0,0,.42);
+          position:relative;
+          border:1px solid rgba(185,144,52,.22);
+        }
+
+        .org-product-modal-close{
+          position:absolute; right:18px; top:18px;
+          width:44px; height:44px; border-radius:50%;
+          border:1px solid rgba(10,30,18,.18);
+          background:rgba(255,255,255,.92);
+          font-size:26px; line-height:1; cursor:pointer;
+          z-index:5; color:#0a1b10;
+          transition:.2s ease;
+        }
+        .org-product-modal-close:hover{
+          transform:rotate(90deg);
+          border-color:#b98c2e;
+        }
+
+        .org-product-hero-grid{
+          display:grid;
+          grid-template-columns:48% 52%;
+          min-height:660px;
+          background:#fff;
+        }
+
+        .org-product-gallery{
+          background:#f2efe5;
+          padding:22px 24px;
+          display:block;
+          border-radius:26px 0 0 0;
+          position:relative;
+        }
+
+        .org-product-main-image{
+          min-height:600px;
+          border-radius:18px;
+          overflow:hidden;
+          background:#ede8dc;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          position:relative;
+        }
+        .org-product-main-image img{
+          width:100%; height:100%;
+          min-height:600px;
+          object-fit:contain;
+          display:block;
+        }
+
+        .org-natural-seal{
+          position:absolute;
+          right:18px; top:18px;
+          width:82px; height:82px;
+          border-radius:50%;
+          background:linear-gradient(145deg,#e8c56a,#f7e4a2);
+          border:2px solid rgba(84,58,5,.28);
+          display:flex;
+          flex-direction:column;
+          align-items:center;
+          justify-content:center;
+          color:#16331f;
+          font-weight:900;
+          text-align:center;
+          font-size:11px;
+          letter-spacing:.4px;
+          box-shadow:0 12px 30px rgba(0,0,0,.16);
+        }
+        .org-natural-seal b{font-size:20px; line-height:1;}
+
+        .org-product-buy-panel{
+          padding:46px 52px 38px;
+          display:flex;
+          flex-direction:column;
+          justify-content:center;
+          background:#fff;
+        }
+
+        .org-product-breadcrumb{
+          font-size:12px; color:#716b60;
+          margin-bottom:18px;
+        }
+        .org-product-kicker{
+          color:#9a6a07;
+          font-size:12px;
+          font-weight:900;
+          letter-spacing:1.7px;
+          margin:0 0 8px;
+        }
+        .org-product-title{
+          margin:0;
+          font-family:Georgia, "Times New Roman", serif;
+          color:#0b2a16;
+          font-size:clamp(40px,4.4vw,66px);
+          line-height:.98;
+          font-weight:700;
+        }
+
+        .org-product-rating{
+          display:flex; align-items:center;
+          gap:10px; margin:18px 0;
+          font-size:13px;
+        }
+        .org-product-stars{
+          color:#d99a00; letter-spacing:2px;
+          font-size:18px;
+        }
+
+        .org-product-trust{
+          display:flex; flex-wrap:wrap; gap:10px 18px;
+          margin-bottom:24px;
+        }
+        .org-product-trust span{
+          display:inline-flex; align-items:center; gap:6px;
+          font-size:12px; color:#243228;
+        }
+        .org-product-trust b{
+          width:23px; height:23px; border-radius:50%;
+          border:1px solid rgba(12,59,29,.2);
+          display:inline-flex; align-items:center; justify-content:center;
+          color:#0d4a24;
+        }
+
+        .org-product-price-row{
+          display:flex; align-items:center; flex-wrap:wrap;
+          gap:12px; margin:3px 0 26px;
+        }
+        .org-product-price-row strong{
+          font-family:Georgia, "Times New Roman", serif;
+          font-size:36px; color:#0b2915;
+        }
+        .org-product-old-price{
+          text-decoration:line-through;
+          color:#9a958a; font-size:17px;
+        }
+        .org-product-discount{
+          background:#fae3a9;
+          color:#9c5e00;
+          border-radius:20px;
+          padding:6px 11px;
+          font-size:12px;
+          font-weight:900;
+        }
+
+        .org-product-section-label{
+          display:block;
+          font-size:11px;
+          font-weight:900;
+          letter-spacing:1.35px;
+          color:#625e56;
+          margin-bottom:9px;
+          text-transform:uppercase;
+        }
+
+        .org-product-variants{
+          display:grid;
+          grid-template-columns:repeat(4,minmax(0,1fr));
+          gap:10px;
+          margin-bottom:24px;
+        }
+        .org-product-variant{
+          border:1px solid #d8d3c8;
+          background:#fff;
+          border-radius:14px;
+          padding:14px 9px;
+          cursor:pointer;
+          text-align:center;
+          transition:.2s ease;
+          min-height:72px;
+        }
+        .org-product-variant:hover{
+          transform:translateY(-2px);
+          border-color:#b88a2c;
+        }
+        .org-product-variant.active{
+          border:2px solid #d39b17;
+          background:#fffdf7;
+          box-shadow:0 8px 20px rgba(160,109,0,.1);
+        }
+        .org-product-variant span{
+          display:block;
+          font-size:15px;
+          font-weight:800;
+          color:#151515;
+          margin-bottom:5px;
+        }
+        .org-product-variant strong{
+          display:block;
+          font-family:Georgia, "Times New Roman", serif;
+          font-size:16px;
+          color:#0d2c18;
+        }
+
+        .org-product-no-variants{
+          margin-bottom:24px;
+          border:1px dashed rgba(13,51,26,.24);
+          background:#faf8f1;
+          color:#6a675f;
+          border-radius:14px;
+          padding:14px 16px;
+          font-size:13px;
+          line-height:1.5;
+        }
+
+        .org-product-actions-row{
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-end;
+          gap:24px;
+          margin-bottom:22px;
+        }
+        .org-product-qty{
+          height:54px;
+          border:1px solid #cfcabf;
+          border-radius:28px;
+          display:grid;
+          grid-template-columns:52px 62px 52px;
+          overflow:hidden;
+          background:#fff;
+        }
+        .org-product-qty button{
+          border:0; background:transparent;
+          font-size:22px; cursor:pointer;
+          color:#17331f;
+        }
+        .org-product-qty span{
+          display:flex; align-items:center;
+          justify-content:center;
+          font-weight:900;
+        }
+        .org-product-total{
+          text-align:right;
+        }
+        .org-product-total small{
+          display:block; color:#807a70;
+          font-size:11px; letter-spacing:1.1px;
+          margin-bottom:4px;
+        }
+        .org-product-total strong{
+          font-family:Georgia, "Times New Roman", serif;
+          color:#0b2915; font-size:32px;
+        }
+
+        .org-product-buttons{
+          display:grid;
+          grid-template-columns:1fr 180px;
+          gap:14px;
+        }
+        .org-product-add{
+          border:0; border-radius:13px;
+          background:linear-gradient(135deg,#0b2d17,#0d5127);
+          color:#fff;
+          padding:17px 22px;
+          font-weight:900;
+          letter-spacing:.4px;
+          cursor:pointer;
+          font-size:14px;
+          box-shadow:0 12px 30px rgba(13,65,31,.18);
+        }
+        .org-product-buy{
+          border:1.5px solid #0a2c16;
+          background:#fff;
+          color:#0a2c16;
+          border-radius:13px;
+          padding:17px 18px;
+          font-weight:900;
+          cursor:pointer;
+          font-size:14px;
+        }
+
+        .org-product-delivery{
+          margin-top:15px;
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px 18px;
+          color:#746f66;
+          font-size:12px;
+        }
+        .org-product-delivery strong{
+          color:#34463a;
+        }
+
+        .org-product-extra{
+          padding:24px 34px 32px;
+          background:#fbfaf5;
+          border-top:1px solid rgba(167,132,48,.18);
+        }
+        .org-product-info-grid{
+          display:grid;
+          grid-template-columns:repeat(3,minmax(0,1fr));
+          gap:18px;
+        }
+        .org-product-info-card{
+          background:#fff;
+          border:1px solid rgba(13,51,26,.08);
+          border-radius:16px;
+          padding:24px;
+          box-shadow:0 8px 24px rgba(0,0,0,.04);
+          min-height:220px;
+        }
+        .org-product-info-card h3{
+          margin:0 0 17px;
+          color:#0c321a;
+          font-size:18px;
+          letter-spacing:.5px;
+        }
+        .org-product-info-card ul{
+          list-style:none; padding:0; margin:0;
+          display:grid; gap:11px;
+        }
+        .org-product-info-card li{
+          color:#42483f;
+          font-size:13px;
+          line-height:1.55;
+          display:flex;
+          gap:9px;
+        }
+        .org-product-info-card li::before{
+          content:"✓";
+          width:19px; height:19px;
+          border-radius:50%;
+          background:#0e4925;
+          color:#fff;
+          display:inline-flex;
+          align-items:center; justify-content:center;
+          font-size:11px;
+          flex:0 0 auto;
+          margin-top:1px;
+        }
+
+        .org-product-description-box{
+          line-height:1.7;
+          color:#4e514c;
+          font-size:13px;
+          margin:0 0 16px;
+        }
+
+        .org-product-nature-strip{
+          margin-top:20px;
+          background:linear-gradient(115deg,#0a2a16,#154c27);
+          border-radius:16px;
+          color:#fff;
+          padding:19px 24px;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:18px;
+          flex-wrap:wrap;
+        }
+        .org-product-nature-strip strong{
+          color:#e6c466;
+          letter-spacing:1.2px;
+          font-size:14px;
+        }
+        .org-product-nature-strip span{
+          font-size:12px;
+          opacity:.95;
+        }
+
+        @media(max-width:900px){
+          .org-product-hero-grid{
+            grid-template-columns:1fr;
+          }
+          .org-product-gallery{
+            border-radius:26px 26px 0 0;
+          }
+          .org-product-main-image,
+          .org-product-main-image img{
+            min-height:420px;
+          }
+          .org-product-buy-panel{
+            padding:32px 24px;
+          }
+          .org-product-info-grid{
+            grid-template-columns:1fr;
+          }
+        }
+
+        @media(max-width:620px){
+          .org-product-modal-backdrop{
+            padding:0;
+            align-items:flex-end;
+          }
+          .org-product-modal{
+            width:100%;
+            max-height:96vh;
+            border-radius:24px 24px 0 0;
+          }
+          .org-product-gallery{
+            padding:14px;
+          }
+          .org-product-main-image,
+          .org-product-main-image img{
+            min-height:330px;
+          }
+          .org-product-title{
+            font-size:38px;
+          }
+          .org-product-variants{
+            grid-template-columns:repeat(2,minmax(0,1fr));
+          }
+          .org-product-buttons{
+            grid-template-columns:1fr;
+          }
+          .org-product-actions-row{
+            align-items:center;
+          }
+          .org-product-extra{
+            padding:18px 14px 24px;
+          }
+        }
+      `}</style>
+
+      <section
+        className="org-product-modal"
+        onClick={(event) => event.stopPropagation()}
+        aria-modal="true"
+        role="dialog"
+        aria-label={`${product.name} product details`}
+      >
+        <button
+          type="button"
+          className="org-product-modal-close"
+          onClick={onClose}
+          aria-label="Close product details"
+        >
+          ×
+        </button>
+
+        <div className="org-product-hero-grid">
+          <div className="org-product-gallery">
+            <div className="org-product-main-image">
+              <img
+                src={normalizePublicImagePath(product.image)}
+                alt={`${product.name} by ORGAVERA`}
+                onError={(event) => {
+                  event.currentTarget.onerror = null;
+                  event.currentTarget.src = "/orgavera-logo.png";
+                }}
+              />
+              <div className="org-natural-seal">
+                <b>❧</b>
+                100%<br />NATURAL
+              </div>
+            </div>
+          </div>
+
+          <div className="org-product-buy-panel">
+            <div className="org-product-breadcrumb">
+              Home / {product.category || "Collection"} / {product.name}
+            </div>
+
+            <p className="org-product-kicker">PREMIUM ORGAVERA QUALITY</p>
+            <h2 className="org-product-title">{product.name}</h2>
+
+            <div className="org-product-rating">
+              <span className="org-product-stars">★★★★★</span>
+              <strong>Customer Favourite</strong>
+            </div>
+
+            <div className="org-product-trust">
+              <span><b>❧</b> Natural Care</span>
+              <span><b>✓</b> Thoughtfully Made</span>
+              <span><b>◇</b> Premium Quality</span>
+              <span><b>♡</b> Cruelty Free</span>
+            </div>
+
+            <div className="org-product-price-row">
+              <strong>
+                {unitPrice > 0 ? `Rs. ${unitPrice.toLocaleString()}` : "Ask for price"}
+              </strong>
+
+              {oldPrice > unitPrice && unitPrice > 0 && (
+                <span className="org-product-old-price">
+                  Rs. {oldPrice.toLocaleString()}
+                </span>
+              )}
+
+              {discount > 0 && (
+                <span className="org-product-discount">
+                  -{discount}% OFF
+                </span>
+              )}
+            </div>
+
+            <span className="org-product-section-label">
+              Choose Size / Quantity
+            </span>
+
+            {variants.length > 0 ? (
+              <div className="org-product-variants">
+                {variants.map((variant) => {
+                  const label = String(variant.label || variant.size || "").trim();
+                  const price = getNumericPrice(variant.price);
+                  const active = label === selectedLabel;
+
+                  return (
+                    <button
+                      type="button"
+                      key={label}
+                      className={`org-product-variant ${active ? "active" : ""}`}
+                      onClick={() => setSelectedLabel(label)}
+                    >
+                      <span>{label}</span>
+                      <strong>
+                        {price > 0
+                          ? `Rs. ${price.toLocaleString()}`
+                          : "Ask price"}
+                      </strong>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="org-product-no-variants">
+                Add sizes from Admin Panel, e.g. 100ml, 150ml, 300ml, 500ml.
+              </div>
+            )}
+
+            <div className="org-product-actions-row">
+              <div>
+                <span className="org-product-section-label">Quantity</span>
+                <div className="org-product-qty">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setQuantity((current) => Math.max(1, current - 1))
+                    }
+                  >
+                    −
+                  </button>
+                  <span>{quantity}</span>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((current) => current + 1)}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="org-product-total">
+                <small>TOTAL PRICE</small>
+                <strong>
+                  {totalPrice > 0
+                    ? `Rs. ${totalPrice.toLocaleString()}`
+                    : "Confirm"}
+                </strong>
+              </div>
+            </div>
+
+            <div className="org-product-buttons">
+              <button
+                type="button"
+                className="org-product-add"
+                onClick={() => {
+                  onAddToCart(product, selectedLabel, quantity);
+                  onClose();
+                }}
+              >
+                🛒 ADD TO CART ·{" "}
+                {totalPrice > 0
+                  ? `Rs. ${totalPrice.toLocaleString()}`
+                  : "CONFIRM PRICE"}
+              </button>
+
+              <button
+                type="button"
+                className="org-product-buy"
+                onClick={() => {
+                  onAddToCart(product, selectedLabel, quantity);
+                  onClose();
+                }}
+              >
+                BUY NOW
+              </button>
+            </div>
+
+            <div className="org-product-delivery">
+              <strong>🚚 Delivery across Pakistan</strong>
+              <span>Secure order</span>
+              <span>WhatsApp support</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="org-product-extra">
+          <div className="org-product-info-grid">
+            <article className="org-product-info-card">
+              <h3>BENEFITS</h3>
+              <ul>
+                {benefits.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+
+            <article className="org-product-info-card">
+              <h3>PRODUCT DETAILS</h3>
+              <p className="org-product-description-box">
+                {product.description ||
+                  "A thoughtfully made ORGAVERA product designed to become an easy part of your everyday care routine."}
+              </p>
+              <ul>
+                <li>Premium ORGAVERA quality</li>
+                <li>Carefully presented and packed</li>
+                <li>Multiple sizes can be managed from admin</li>
+              </ul>
+            </article>
+
+            <article className="org-product-info-card">
+              <h3>HOW TO USE</h3>
+              <ul>
+                {howToUse.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+
+          <div className="org-product-nature-strip">
+            <div>
+              <strong>NATURE'S GOODNESS</strong>
+              <span style={{ display: "block", marginTop: "4px" }}>
+                Premium botanical care by ORGAVERA
+              </span>
+            </div>
+            <span>❧ Thoughtfully Made</span>
+            <span>✦ Premium Quality</span>
+            <span>♡ Everyday Care</span>
+            <span>⌂ Pakistan Delivery</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Home() {
   const CART_STORAGE_KEY = "orgaveraCart";
 
@@ -337,6 +1099,8 @@ function Home() {
   const [notice, setNotice] = useState("");
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
   const [checkoutStep, setCheckoutStep] = useState(1);
+  const [selectedVariants, setSelectedVariants] = useState({});
+  const [detailProduct, setDetailProduct] = useState(null);
 
   const updateCart = (updater) => {
     setCart((currentCart) => {
@@ -393,17 +1157,153 @@ function Home() {
   }, []);
 
 
-  const addToCart = (product) => {
+  const getProductVariants = (product) =>
+    Array.isArray(product?.variants)
+      ? product.variants.filter((variant) =>
+        String(variant?.label || variant?.size || "").trim()
+      )
+      : [];
+
+  const getSelectedProductVariant = (product) => {
+    const variants = getProductVariants(product);
+    if (!variants.length) return null;
+
+    const firstLabel = String(variants[0].label || variants[0].size || "").trim();
+    const selectedLabel = selectedVariants[product.id] || firstLabel;
+
+    return (
+      variants.find(
+        (variant) =>
+          String(variant.label || variant.size || "").trim() === selectedLabel
+      ) || variants[0]
+    );
+  };
+
+  const getHomeDisplayPrice = (product) => {
+    const variant = getSelectedProductVariant(product);
+    const numericPrice = variant
+      ? getNumericPrice(variant.price)
+      : getNumericPrice(product.price);
+
+    return numericPrice > 0
+      ? `Rs. ${numericPrice.toLocaleString()}`
+      : String(product.price || "Ask for price");
+  };
+
+  const renderHomeVariantOptions = (product) => {
+    const variants = getProductVariants(product);
+    if (!variants.length) return null;
+
+    const selectedVariant = getSelectedProductVariant(product);
+    const selectedLabel = selectedVariant
+      ? String(selectedVariant.label || selectedVariant.size || "").trim()
+      : "";
+
+    return (
+      <div
+        className="orgavera-variant-options"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "8px",
+          marginTop: "12px",
+          marginBottom: "12px",
+        }}
+      >
+        {variants.map((variant) => {
+          const label = String(variant.label || variant.size || "").trim();
+          const price = getNumericPrice(variant.price);
+          const active = selectedLabel === label;
+
+          return (
+            <button
+              type="button"
+              key={label}
+              onClick={() =>
+                setSelectedVariants((current) => ({
+                  ...current,
+                  [product.id]: label,
+                }))
+              }
+              aria-pressed={active}
+              style={{
+                border: active
+                  ? "1.5px solid #b88a2c"
+                  : "1px solid rgba(30,30,30,.18)",
+                background: active ? "#111" : "#fff",
+                color: active ? "#fff" : "#171717",
+                borderRadius: "10px",
+                padding: "8px 10px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: 700,
+                lineHeight: 1.25,
+                boxShadow: active
+                  ? "0 5px 16px rgba(0,0,0,.12)"
+                  : "none",
+                transition: "all .2s ease",
+              }}
+            >
+              {label}
+              {price > 0 ? ` — Rs. ${price.toLocaleString()}` : ""}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const addToCart = (product, forcedVariantLabel = "", amount = 1) => {
+    const availableVariants = getProductVariants(product);
+    const variant = forcedVariantLabel
+      ? availableVariants.find(
+        (item) =>
+          String(item.label || item.size || "").trim() === forcedVariantLabel
+      ) || getSelectedProductVariant(product)
+      : getSelectedProductVariant(product);
+    const variantLabel = variant
+      ? String(variant.label || variant.size || "").trim()
+      : "";
+    const unitPrice = variant
+      ? getNumericPrice(variant.price)
+      : getNumericPrice(product.price);
+
+    const cartId = variantLabel
+      ? `${product.id}::${variantLabel}`
+      : product.id;
+
+    const priceLabel =
+      unitPrice > 0
+        ? `Rs. ${unitPrice.toLocaleString()}`
+        : String(product.price || "Ask for price");
+
+    const productForCart = {
+      ...product,
+      id: cartId,
+      originalId: product.id,
+      variantLabel,
+      unitPrice,
+      price: priceLabel,
+      image: normalizePublicImagePath(product.image),
+    };
+
     updateCart((currentCart) => {
-      const existing = currentCart.find((item) => item.id === product.id);
+      const existing = currentCart.find((item) => item.id === cartId);
+
       if (existing) {
         return currentCart.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === cartId
+            ? { ...item, quantity: item.quantity + amount }
+            : item
         );
       }
-      return [...currentCart, { ...product, quantity: 1 }];
+
+      return [...currentCart, { ...productForCart, quantity: amount }];
     });
-    setNotice(`${product.name} added to cart`);
+
+    setNotice(
+      `${product.name}${variantLabel ? ` (${variantLabel})` : ""} added to cart`
+    );
     setCheckoutStep(1);
     setIsCartOpen(true);
     window.setTimeout(() => setNotice(""), 2200);
@@ -431,7 +1331,11 @@ function Home() {
   );
 
   const cartTotal = useMemo(
-    () => cart.reduce((total, item) => total + getNumericPrice(item.price) * item.quantity, 0),
+    () =>
+      cart.reduce((total, item) => {
+        const unit = Number(item.unitPrice || getNumericPrice(item.price));
+        return total + unit * Number(item.quantity || 0);
+      }, 0),
     [cart]
   );
 
@@ -447,7 +1351,11 @@ function Home() {
     }
 
     const productLines = cart
-      .map((item) => `• ${item.name} × ${item.quantity} — Rs. ${getNumericPrice(item.price) * item.quantity}`)
+      .map((item) => {
+        const unit = Number(item.unitPrice || getNumericPrice(item.price));
+        const variant = item.variantLabel ? ` (${item.variantLabel})` : "";
+        return `• ${item.name}${variant} × ${item.quantity} — Rs. ${(unit * item.quantity).toLocaleString()}`;
+      })
       .join("\n");
 
     const message = `🌿 ORGAVERA ORDER\n\nCustomer Name: ${customer.name}\nPhone: ${customer.phone}\nAddress: ${customer.address}\n\nProducts:\n${productLines}\n\nTotal: Rs. ${cartTotal}\n\nPlease confirm my order. Thank you!`;
@@ -502,17 +1410,7 @@ function Home() {
 
         <div className="navbar-actions">
 
-          <Link
-            to="/signup"
-            className="navbar-button signup-nav-button"
-            aria-label="Create your ORGAVERA account"
-          >
-            <span className="login-nav-copy">
-              <small>NEW HERE?</small>
-              <strong>SIGN UP</strong>
-            </span>
-            <span className="login-nav-arrow" aria-hidden="true">↗</span>
-          </Link>
+
 
           <button type="button" className="navbar-button cart-nav-button" onClick={() => setIsCartOpen(true)}>
             Cart
@@ -709,7 +1607,7 @@ function Home() {
           <div className="top-sellers-grid">
             {bestSellerDeals.map((product) => (
               <article className="top-seller-card reveal" key={product.id}>
-                <div className="top-seller-image-wrap">
+                <div className="top-seller-image-wrap" onClick={() => setDetailProduct(product)} style={{ cursor: "pointer" }}>
                   <span className="discount-badge">{product.discount}</span>
 
                   <img
@@ -728,7 +1626,7 @@ function Home() {
                     className="top-seller-cart"
                     aria-label={`Add ${product.name} to cart`}
                     title={`Add ${product.name} to cart`}
-                    onClick={() => addToCart(product)}
+                    onClick={(event) => { event.stopPropagation(); addToCart(product); }}
                   >
                     🛒
                   </button>
@@ -744,8 +1642,10 @@ function Home() {
                     <span></span>
                   </div>
 
+                  {renderHomeVariantOptions(product)}
+
                   <div className="top-seller-price">
-                    <strong>{product.price}</strong>
+                    <strong>{getHomeDisplayPrice(product)}</strong>
                     <span>{product.oldPrice}</span>
                   </div>
                 </div>
@@ -889,7 +1789,7 @@ function Home() {
             <div className="collection-scroll collection-scroll-preview">
               {adminCatalog.skincare.slice(0, 4).map((product) => (
                 <article className="collection-card" key={product.id}>
-                  <div className="collection-image-wrap">
+                  <div className="collection-image-wrap" onClick={() => setDetailProduct(product)} style={{ cursor: "pointer" }}>
                     <img
                       src={normalizePublicImagePath(product.image)}
                       alt={`${product.name} by ORGAVERA`}
@@ -907,7 +1807,7 @@ function Home() {
                       type="button"
                       className="collection-order"
                       aria-label={`Add ${product.name} to cart`}
-                      onClick={() => addToCart(product)}
+                      onClick={(event) => { event.stopPropagation(); addToCart(product); }}
                     >
                       +
                     </button>
@@ -921,7 +1821,8 @@ function Home() {
                         {product.description}
                       </p>
                     )}
-                    <strong>{product.price}</strong>
+                    {renderHomeVariantOptions(product)}
+                    <strong>{getHomeDisplayPrice(product)}</strong>
                   </div>
                 </article>
               ))}
@@ -943,7 +1844,7 @@ function Home() {
             <div className="collection-scroll collection-scroll-hair collection-scroll-preview">
               {adminCatalog.haircare.slice(0, 4).map((product) => (
                 <article className="collection-card" key={product.id}>
-                  <div className="collection-image-wrap">
+                  <div className="collection-image-wrap" onClick={() => setDetailProduct(product)} style={{ cursor: "pointer" }}>
                     <img
                       src={normalizePublicImagePath(product.image)}
                       alt={`${product.name} by ORGAVERA`}
@@ -961,7 +1862,7 @@ function Home() {
                       type="button"
                       className="collection-order"
                       aria-label={`Add ${product.name} to cart`}
-                      onClick={() => addToCart(product)}
+                      onClick={(event) => { event.stopPropagation(); addToCart(product); }}
                     >
                       +
                     </button>
@@ -975,7 +1876,8 @@ function Home() {
                         {product.description}
                       </p>
                     )}
-                    <strong>{product.price}</strong>
+                    {renderHomeVariantOptions(product)}
+                    <strong>{getHomeDisplayPrice(product)}</strong>
                   </div>
                 </article>
               ))}
@@ -1026,7 +1928,7 @@ function Home() {
               <div className="collection-scroll collection-scroll-preview">
                 {category.items.slice(0, 4).map((item) => (
                   <article className="collection-card" key={item.id} style={{ minWidth: 0 }}>
-                    <div className="collection-image-wrap">
+                    <div className="collection-image-wrap" onClick={() => setDetailProduct(item)} style={{ cursor: "pointer" }}>
                       <img
                         src={normalizePublicImagePath(item.image)}
                         alt={`${item.name} by ORGAVERA`}
@@ -1045,7 +1947,7 @@ function Home() {
                           type="button"
                           className="collection-order"
                           aria-label={`Add ${item.name} to cart`}
-                          onClick={() => addToCart(item)}
+                          onClick={(event) => { event.stopPropagation(); addToCart(item); }}
                         >
                           +
                         </button>
@@ -1069,7 +1971,8 @@ function Home() {
                           {item.description}
                         </p>
                       )}
-                      <strong>{item.price}</strong>
+                      {category.id !== "classes-products" && renderHomeVariantOptions(item)}
+                      <strong>{getHomeDisplayPrice(item)}</strong>
                     </div>
                   </article>
                 ))}
@@ -1329,7 +2232,7 @@ function Home() {
                       <article className="cart-item premium-cart-item" key={item.id}>
                         <div className="cart-item-image-wrap"><img src={item.image} alt={item.name} /></div>
                         <div className="cart-item-copy">
-                          <small>{item.category || item.type || "ORGAVERA Care"}</small>
+                          <small>{item.variantLabel || item.category || item.type || "ORGAVERA Care"}</small>
                           <h4>{item.name}</h4>
                           <p>{item.price} each</p>
                           <div className="cart-quantity" aria-label={`Quantity of ${item.name}`}>
@@ -1338,7 +2241,9 @@ function Home() {
                             <button type="button" onClick={() => updateQuantity(item.id, 1)}>+</button>
                           </div>
                         </div>
-                        <strong className="cart-line-total">Rs. {getNumericPrice(item.price) * item.quantity}</strong>
+                        <strong className="cart-line-total">
+                          Rs. {(Number(item.unitPrice || getNumericPrice(item.price)) * item.quantity).toLocaleString()}
+                        </strong>
                         <button type="button" className="cart-remove" onClick={() => removeFromCart(item.id)}>×</button>
                       </article>
                     ))}
@@ -1401,6 +2306,12 @@ function Home() {
           )}
         </div>
       </aside>
+
+      <ProductDetailModal
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onAddToCart={addToCart}
+      />
 
       {/* ================= PREMIUM CONTACT / FOOTER ================= */}
       <footer id="contact" className="premium-footer">
@@ -1591,6 +2502,7 @@ function CategoryCollectionPage({ categoryKey }) {
   const [query, setQuery] = useState("");
   const [sortOrder, setSortOrder] = useState("featured");
   const [selectedVariants, setSelectedVariants] = useState({});
+  const [detailProduct, setDetailProduct] = useState(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
@@ -1605,7 +2517,7 @@ function CategoryCollectionPage({ categoryKey }) {
     }
   });
 
-  const getNumericPrice = (price) => Number(String(price ?? "").replace(/[^0-9.]/g, "")) || 0;
+  const getNumericPrice = (price) => Number(String(price ?? "").replace(/[^0-9]/g, "")) || 0;
 
   const updateCart = (updater) => {
     setCart((currentCart) => {
@@ -1668,8 +2580,14 @@ function CategoryCollectionPage({ categoryKey }) {
     return String(item.price || "Ask for price");
   };
 
-  const addCategoryItemToCart = (item) => {
-    const variant = getSelectedVariant(item);
+  const addCategoryItemToCart = (item, forcedVariantLabel = "", amount = 1) => {
+    const availableVariants = getItemVariants(item);
+    const variant = forcedVariantLabel
+      ? availableVariants.find(
+        (variantItem) =>
+          String(variantItem.label || variantItem.size || "").trim() === forcedVariantLabel
+      ) || getSelectedVariant(item)
+      : getSelectedVariant(item);
     const variantLabel = variant ? String(variant.label || variant.size || "").trim() : "";
     const unitPrice = variant ? getNumericPrice(variant.price) : getNumericPrice(item.price);
     const cartId = variantLabel ? `${item.id}::${variantLabel}` : item.id;
@@ -1679,7 +2597,7 @@ function CategoryCollectionPage({ categoryKey }) {
       const existing = currentCart.find((cartItem) => cartItem.id === cartId);
       if (existing) {
         return currentCart.map((cartItem) =>
-          cartItem.id === cartId ? { ...cartItem, quantity: cartItem.quantity + 1 } : cartItem
+          cartItem.id === cartId ? { ...cartItem, quantity: cartItem.quantity + amount } : cartItem
         );
       }
 
@@ -1693,7 +2611,7 @@ function CategoryCollectionPage({ categoryKey }) {
           unitPrice,
           price: priceLabel,
           image: normalizePublicImagePath(item.image),
-          quantity: 1,
+          quantity: amount,
         },
       ];
     });
@@ -1822,7 +2740,7 @@ function CategoryCollectionPage({ categoryKey }) {
 
               return (
                 <article className="premium-product-card" key={item.id}>
-                  <div className="premium-product-image-wrap">
+                  <div className="premium-product-image-wrap" onClick={() => setDetailProduct(item)} style={{ cursor: "pointer" }}>
                     <span className="premium-product-badge">{index === 0 ? "FEATURED" : "ORGAVERA"}</span>
                     <img
                       src={normalizePublicImagePath(item.image)}
@@ -1840,7 +2758,7 @@ function CategoryCollectionPage({ categoryKey }) {
                       type="button"
                       className="premium-card-action"
                       aria-label={`Add ${item.name} to cart`}
-                      onClick={() => addCategoryItemToCart(item)}
+                      onClick={(event) => { event.stopPropagation(); addCategoryItemToCart(item); }}
                     >
                       +
                     </button>
@@ -1848,23 +2766,80 @@ function CategoryCollectionPage({ categoryKey }) {
 
                   <div className="premium-product-info">
                     <p>{item.type || "ORGAVERA"}</p>
-                    <h3>{item.name}</h3>
+                    <h3 onClick={() => setDetailProduct(item)} style={{ cursor: "pointer" }}>{item.name}</h3>
                     {item.description && <span className="premium-product-description">{item.description}</span>}
 
                     {variants.length > 0 && (
-                      <label className="premium-variant-picker">
-                        <span>Select size</span>
-                        <select
-                          value={selectedLabel}
-                          onChange={(event) => setSelectedVariants((current) => ({ ...current, [item.id]: event.target.value }))}
+                      <div
+                        className="premium-variant-picker"
+                        style={{ marginTop: "14px", marginBottom: "14px" }}
+                      >
+                        <span
+                          style={{
+                            display: "block",
+                            marginBottom: "8px",
+                            fontSize: "11px",
+                            fontWeight: 800,
+                            letterSpacing: "1.2px",
+                            textTransform: "uppercase",
+                            opacity: 0.65,
+                          }}
+                        >
+                          Select size
+                        </span>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "8px",
+                          }}
                         >
                           {variants.map((variant) => {
-                            const label = String(variant.label || variant.size || "");
+                            const label = String(
+                              variant.label || variant.size || ""
+                            ).trim();
                             const price = getNumericPrice(variant.price);
-                            return <option key={label} value={label}>{label}{price > 0 ? ` — Rs. ${price.toLocaleString()}` : ""}</option>;
+                            const active = selectedLabel === label;
+
+                            return (
+                              <button
+                                type="button"
+                                key={label}
+                                onClick={() =>
+                                  setSelectedVariants((current) => ({
+                                    ...current,
+                                    [item.id]: label,
+                                  }))
+                                }
+                                aria-pressed={active}
+                                style={{
+                                  border: active
+                                    ? "1.5px solid #b88a2c"
+                                    : "1px solid rgba(30,30,30,.18)",
+                                  background: active ? "#111" : "#fff",
+                                  color: active ? "#fff" : "#171717",
+                                  borderRadius: "10px",
+                                  padding: "9px 11px",
+                                  cursor: "pointer",
+                                  fontSize: "12px",
+                                  fontWeight: 700,
+                                  lineHeight: 1.25,
+                                  boxShadow: active
+                                    ? "0 6px 18px rgba(0,0,0,.12)"
+                                    : "none",
+                                  transition: "all .2s ease",
+                                }}
+                              >
+                                {label}
+                                {price > 0
+                                  ? ` — Rs. ${price.toLocaleString()}`
+                                  : ""}
+                              </button>
+                            );
                           })}
-                        </select>
-                      </label>
+                        </div>
+                      </div>
                     )}
 
                     <div className="premium-product-bottom">
@@ -1967,6 +2942,12 @@ function CategoryCollectionPage({ categoryKey }) {
           )}
         </div>
       </aside>
+
+      <ProductDetailModal
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onAddToCart={addCategoryItemToCart}
+      />
 
       <footer className="premium-category-footer">
         <Link to="/" className="premium-footer-brand">
