@@ -4,9 +4,8 @@ import "./Admin.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const CATEGORY_MAP = { bestsellers: "best-sellers", skincare: "skin-care", haircare: "hair-care", soaps: "soaps", ingredients: "ingredients", classes: "classes" };
+const CATEGORY_MAP = { skincare: "skin-care", haircare: "hair-care", soaps: "soaps", ingredients: "ingredients", classes: "classes" };
 const CATEGORY_ALIASES = {
-    bestsellers: ["best-sellers", "best sellers", "bestsellers"],
     skincare: ["skin-care", "skincare", "skin care"], haircare: ["hair-care", "haircare", "hair care"],
     soaps: ["soaps", "soap", "artisan soaps"], ingredients: ["ingredients", "cosmetic ingredients"],
     classes: ["classes", "class", "book class"]
@@ -18,7 +17,7 @@ const normalizePublicImagePath = value => {
     if (/^(https?:|data:|blob:)/i.test(image)) return image;
     return image.startsWith("/") ? image : `/${image.replace(/^\.\//, "")}`;
 };
-const emptyVariant = { label: "", price: "", stock: "" };
+const emptyVariant = { size: "", price: "", stock: "" };
 const emptyForm = {
     name: "",
     type: "",
@@ -92,9 +91,9 @@ export default function Admin() {
         }
 
         const cleanVariants = (form.variants || [])
-            .filter((variant) => String(variant.label || "").trim())
+            .filter((variant) => String(variant.size || "").trim())
             .map((variant) => ({
-                label: String(variant.label).trim(),
+                size: String(variant.size).trim(),
                 price: Number(String(variant.price).replace(/[^0-9.]/g, "")) || 0,
                 stock: Number(String(variant.stock).replace(/[^0-9]/g, "")) || 0,
             }));
@@ -139,7 +138,7 @@ export default function Admin() {
             description: item.description || "",
             variants: Array.isArray(item.variants)
                 ? item.variants.map((variant) => ({
-                    label: variant.label || variant.size || "",
+                    size: variant.size || variant.label || "",
                     price: variant.price ?? "",
                     stock: variant.stock ?? 0,
                 }))
@@ -172,14 +171,6 @@ export default function Admin() {
                 </Link>
 
                 <p className="org-admin-menu-label">CATALOG</p>
-
-                <button
-                    className={category === "bestsellers" ? "active" : ""}
-                    onClick={() => changeCategory("bestsellers")}
-                >
-                    <span>00</span>
-                    Best Seller Deals
-                </button>
 
                 <button
                     className={category === "skincare" ? "active" : ""}
@@ -233,17 +224,15 @@ export default function Admin() {
                         <p>CONTENT MANAGEMENT</p>
                         <h1>
                             Manage <em>{
-                                category === "bestsellers"
-                                    ? "Best Seller Deals"
-                                    : category === "skincare"
-                                        ? "Skin Care"
-                                        : category === "haircare"
-                                            ? "Hair Care"
-                                            : category === "ingredients"
-                                                ? "Ingredients"
-                                                : category === "classes"
-                                                    ? "Classes"
-                                                    : "Soaps"
+                                category === "skincare"
+                                    ? "Skin Care"
+                                    : category === "haircare"
+                                        ? "Hair Care"
+                                        : category === "ingredients"
+                                            ? "Ingredients"
+                                            : category === "classes"
+                                                ? "Classes"
+                                                : "Soaps"
                             }</em>
                         </h1>
                     </div>
@@ -311,8 +300,8 @@ export default function Admin() {
                                     <label>
                                         <span>Size / Quantity</span>
                                         <input
-                                            value={variant.label}
-                                            onChange={(e) => updateVariant(index, "label", e.target.value)}
+                                            value={variant.size}
+                                            onChange={(e) => updateVariant(index, "size", e.target.value)}
                                             placeholder="100 ml"
                                         />
                                     </label>
@@ -368,7 +357,7 @@ export default function Admin() {
                         </label>
 
                         <label className="org-admin-description-field">
-                            <span>{category === "bestsellers" ? "Old price for deal" : "Details / description"}</span>
+                            <span>Details / description</span>
                             <textarea
                                 value={form.description}
                                 onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -450,7 +439,7 @@ export default function Admin() {
                                                 <div className="org-admin-table-variants">
                                                     {item.variants.map((variant, index) => (
                                                         <small key={index}>
-                                                            {variant.label || variant.size}: Rs. {variant.price} · Stock {variant.stock ?? 0}
+                                                            {variant.size || variant.label}: Rs. {variant.price} · Stock {variant.stock ?? 0}
                                                         </small>
                                                     ))}
                                                 </div>

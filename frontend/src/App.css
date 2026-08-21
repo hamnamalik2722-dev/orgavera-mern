@@ -12932,4 +12932,46 @@ footer {
     height: 98% !important;
     border-radius: 8px;
   }
+
+  .admin-alert {
+    width: min(700px, 92%);
+    margin: 15px auto 25px;
+    padding: 14px 20px;
+
+    border-radius: 12px;
+    text-align: center;
+
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+
+    position: relative;
+    z-index: 10;
+
+    animation: alertSlideDown 0.35s ease;
+  }
+
+  .admin-alert.success {
+    background: rgba(52, 211, 153, 0.12);
+    border: 1px solid rgba(52, 211, 153, 0.45);
+    color: #86efac;
+  }
+
+  .admin-alert.error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    color: #fca5a5;
+  }
+
+  @keyframes alertSlideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
