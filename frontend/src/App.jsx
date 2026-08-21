@@ -301,6 +301,16 @@ const buildCatalogFromApi = (apiProducts) => {
       image: normalizePublicImagePath(item.image),
       type: item.type || item.category || "",
       description: item.description || "",
+      variants: Array.isArray(item.variants)
+        ? item.variants
+          .map((variant) => ({
+            ...variant,
+            size: String(variant?.size || variant?.label || "").trim(),
+            price: Number(variant?.price ?? 0),
+            stock: Number(variant?.stock ?? 0),
+          }))
+          .filter((variant) => variant.size)
+        : [],
     });
   });
 
@@ -308,7 +318,11 @@ const buildCatalogFromApi = (apiProducts) => {
 };
 
 const fetchCatalogFromApi = async () => {
-  const response = await fetch(`${API_URL}/api/products`);
+  const response = await fetch(`${API_URL}/api/products`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
   const result = await response.json();
 
   if (!response.ok) {
@@ -331,17 +345,17 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
     ? product.variants
       .map((variant) => ({
         ...variant,
-        label: String(variant?.label || variant?.size || "").trim(),
+        size: String(variant?.size || variant?.label || "").trim(),
         price: getNumericPrice(variant?.price),
         stock: Number(variant?.stock ?? 0),
       }))
-      .filter((variant) => variant.label)
+      .filter((variant) => variant.size)
     : [];
 
   useEffect(() => {
     if (!product) return;
     const firstLabel = variants.length
-      ? String(variants[0].label || variants[0].size || "").trim()
+      ? String(variants[0].size || variants[0].label || "").trim()
       : "";
     setSelectedLabel(firstLabel);
     setQuantity(1);
@@ -352,7 +366,7 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
   const selectedVariant =
     variants.find(
       (variant) =>
-        String(variant.label || variant.size || "").trim() === selectedLabel
+        String(variant.size || variant.label || "").trim() === selectedLabel
     ) || variants[0] || null;
 
   const unitPrice = selectedVariant
@@ -934,7 +948,7 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
             {variants.length > 0 ? (
               <div className="org-product-variants">
                 {variants.map((variant) => {
-                  const label = String(variant.label || variant.size || "").trim();
+                  const label = String(variant.size || variant.label || "").trim();
                   const price = getNumericPrice(variant.price);
                   const active = label === selectedLabel;
 
@@ -1160,7 +1174,7 @@ function Home() {
   const getProductVariants = (product) =>
     Array.isArray(product?.variants)
       ? product.variants.filter((variant) =>
-        String(variant?.label || variant?.size || "").trim()
+        String(variant?.size || variant?.label || "").trim()
       )
       : [];
 
@@ -1168,13 +1182,13 @@ function Home() {
     const variants = getProductVariants(product);
     if (!variants.length) return null;
 
-    const firstLabel = String(variants[0].label || variants[0].size || "").trim();
+    const firstLabel = String(variants[0].size || variants[0].label || "").trim();
     const selectedLabel = selectedVariants[product.id] || firstLabel;
 
     return (
       variants.find(
         (variant) =>
-          String(variant.label || variant.size || "").trim() === selectedLabel
+          String(variant.size || variant.label || "").trim() === selectedLabel
       ) || variants[0]
     );
   };
@@ -1196,7 +1210,7 @@ function Home() {
 
     const selectedVariant = getSelectedProductVariant(product);
     const selectedLabel = selectedVariant
-      ? String(selectedVariant.label || selectedVariant.size || "").trim()
+      ? String(selectedVariant.size || selectedVariant.label || "").trim()
       : "";
 
     return (
@@ -1211,7 +1225,7 @@ function Home() {
         }}
       >
         {variants.map((variant) => {
-          const label = String(variant.label || variant.size || "").trim();
+          const label = String(variant.size || variant.label || "").trim();
           const price = getNumericPrice(variant.price);
           const active = selectedLabel === label;
 
@@ -1258,11 +1272,11 @@ function Home() {
     const variant = forcedVariantLabel
       ? availableVariants.find(
         (item) =>
-          String(item.label || item.size || "").trim() === forcedVariantLabel
+          String(item.size || item.label || "").trim() === forcedVariantLabel
       ) || getSelectedProductVariant(product)
       : getSelectedProductVariant(product);
     const variantLabel = variant
-      ? String(variant.label || variant.size || "").trim()
+      ? String(variant.size || variant.label || "").trim()
       : "";
     const unitPrice = variant
       ? getNumericPrice(variant.price)
@@ -2563,14 +2577,14 @@ function CategoryCollectionPage({ categoryKey }) {
 
   const getItemVariants = (item) =>
     Array.isArray(item.variants)
-      ? item.variants.filter((variant) => String(variant?.label || variant?.size || "").trim())
+      ? item.variants.filter((variant) => String(variant?.size || variant?.label || "").trim())
       : [];
 
   const getSelectedVariant = (item) => {
     const variants = getItemVariants(item);
     if (!variants.length) return null;
-    const selectedLabel = selectedVariants[item.id] || String(variants[0].label || variants[0].size || "");
-    return variants.find((variant) => String(variant.label || variant.size || "") === selectedLabel) || variants[0];
+    const selectedLabel = selectedVariants[item.id] || String(variants[0].size || variants[0].label || "");
+    return variants.find((variant) => String(variant.size || variant.label || "") === selectedLabel) || variants[0];
   };
 
   const getDisplayPrice = (item) => {
@@ -2588,7 +2602,7 @@ function CategoryCollectionPage({ categoryKey }) {
           String(variantItem.label || variantItem.size || "").trim() === forcedVariantLabel
       ) || getSelectedVariant(item)
       : getSelectedVariant(item);
-    const variantLabel = variant ? String(variant.label || variant.size || "").trim() : "";
+    const variantLabel = variant ? String(variant.size || variant.label || "").trim() : "";
     const unitPrice = variant ? getNumericPrice(variant.price) : getNumericPrice(item.price);
     const cartId = variantLabel ? `${item.id}::${variantLabel}` : item.id;
     const priceLabel = unitPrice > 0 ? `Rs. ${unitPrice}` : String(item.price || "Ask for price");
@@ -3175,3 +3189,4 @@ function App() {
 }
 
 export default App;
+g
