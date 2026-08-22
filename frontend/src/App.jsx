@@ -291,18 +291,37 @@ const buildCatalogFromApi = (apiProducts) => {
     const key = API_CATEGORY_KEYS[String(item.category || "").trim().toLowerCase()];
     if (!key) return;
 
-    catalog[key].push({
+    const normalizedItem = {
       ...item,
       id: item._id || item.id,
       price:
         typeof item.price === "number"
           ? `Rs. ${item.price}`
           : String(item.price || ""),
+      oldPrice:
+        Number(item.oldPrice || 0) > 0
+          ? `Rs. ${Number(item.oldPrice).toLocaleString()}`
+          : "",
       image: normalizePublicImagePath(item.image),
       type: item.type || item.category || "",
       description: item.description || "",
-    });
+      ingredients: item.ingredients || "",
+      benefits: Array.isArray(item.benefits) ? item.benefits : [],
+      methodOfUse: Array.isArray(item.methodOfUse) ? item.methodOfUse : [],
+      variants: Array.isArray(item.variants) ? item.variants : [],
+      isBestSeller: Boolean(item.isBestSeller),
+      bestSellerBadge: item.bestSellerBadge || "",
+      bestSellerOrder: Number(item.bestSellerOrder || 0),
+    };
+
+    catalog[key].push(normalizedItem);
+
+    if (normalizedItem.isBestSeller) {
+      catalog.bestsellers.push(normalizedItem);
+    }
   });
+
+  catalog.bestsellers.sort((a, b) => a.bestSellerOrder - b.bestSellerOrder);
 
   return catalog;
 };
@@ -371,7 +390,7 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
   const isSkin = categoryText.includes("skin") || categoryText.includes("face");
   const isSoap = categoryText.includes("soap");
 
-  const benefits = isHair
+  const defaultBenefits = isHair
     ? [
       "Helps nourish hair from root to tip",
       "Supports softer, smoother-looking hair",
@@ -399,7 +418,7 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
           "Carefully selected formulation approach",
         ];
 
-  const howToUse = isHair
+  const defaultHowToUse = isHair
     ? [
       "Take the required amount of product.",
       "Apply gently to hair or scalp as suitable.",
@@ -419,6 +438,16 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
         "Use consistently for best experience.",
         "Store in a cool, dry place.",
       ];
+
+  const benefits =
+    Array.isArray(product.benefits) && product.benefits.length
+      ? product.benefits
+      : defaultBenefits;
+
+  const howToUse =
+    Array.isArray(product.methodOfUse) && product.methodOfUse.length
+      ? product.methodOfUse
+      : defaultHowToUse;
 
   return (
     <div
@@ -1045,6 +1074,13 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
                 {product.description ||
                   "A thoughtfully made ORGAVERA product designed to become an easy part of your everyday care routine."}
               </p>
+
+              {product.ingredients && (
+                <p className="org-product-description-box">
+                  <strong>Ingredients:</strong> {product.ingredients}
+                </p>
+              )}
+
               <ul>
                 <li>Premium ORGAVERA quality</li>
                 <li>Carefully presented and packed</li>
@@ -1122,8 +1158,8 @@ function Home() {
   const bestSellerDeals = adminCatalog.bestsellers.length
     ? adminCatalog.bestsellers.slice(0, 4).map((item) => {
       const currentPrice = getNumericPrice(item.price);
-      const originalPrice = getNumericPrice(item.description);
-      const discount =
+      const originalPrice = getNumericPrice(item.oldPrice);
+      const autoDiscount =
         originalPrice > currentPrice && currentPrice > 0
           ? `-${Math.round(((originalPrice - currentPrice) / originalPrice) * 100)}%`
           : "DEAL";
@@ -1132,7 +1168,7 @@ function Home() {
         ...item,
         category: item.type || "ORGAVERA",
         oldPrice: originalPrice > currentPrice ? `Rs. ${originalPrice.toLocaleString()}` : "",
-        discount,
+        discount: item.bestSellerBadge || autoDiscount,
       };
     })
     : products;
