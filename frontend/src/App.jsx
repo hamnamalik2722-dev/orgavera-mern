@@ -289,6 +289,10 @@ const buildCatalogFromApi = (apiProducts) => {
 
   (Array.isArray(apiProducts) ? apiProducts : []).forEach((item) => {
     const key = API_CATEGORY_KEYS[String(item.category || "").trim().toLowerCase()];
+
+    // Best-seller deals still belong to their normal MongoDB category
+    // (skin-care, hair-care, soaps, etc.). Do not discard them just because
+    // they are marked as a best seller.
     if (!key) return;
 
     const normalizedItem = {
@@ -309,7 +313,11 @@ const buildCatalogFromApi = (apiProducts) => {
       benefits: Array.isArray(item.benefits) ? item.benefits : [],
       methodOfUse: Array.isArray(item.methodOfUse) ? item.methodOfUse : [],
       variants: Array.isArray(item.variants) ? item.variants : [],
-      isBestSeller: Boolean(item.isBestSeller),
+      isBestSeller:
+        item.isBestSeller === true ||
+        item.isBestSeller === "true" ||
+        item.isBestSeller === 1 ||
+        item.isBestSeller === "1",
       bestSellerBadge: item.bestSellerBadge || "",
       bestSellerOrder: Number(item.bestSellerOrder || 0),
     };
