@@ -1171,7 +1171,7 @@ function Home() {
         discount: item.bestSellerBadge || autoDiscount,
       };
     })
-    : products;
+    : [];
 
   useEffect(() => {
     let active = true;
