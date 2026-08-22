@@ -1,96 +1,42 @@
 const mongoose = require("mongoose");
 
-/* ================= PRODUCT VARIANT ================= */
-
 const variantSchema = new mongoose.Schema(
     {
-        // Example: 100 ml, 150 ml, 200 ml, 1 kg
-        label: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-
-        price: {
-            type: Number,
-            required: true,
-            min: 0,
-        },
-
-        stock: {
-            type: Number,
-            default: 0,
-            min: 0,
-        },
+        size: { type: String, required: true, trim: true },
+        price: { type: Number, required: true, min: 0 },
+        stock: { type: Number, default: 0, min: 0 },
     },
-    {
-        _id: false,
-    }
+    { _id: false }
 );
-
-/* ================= PRODUCT ================= */
 
 const productSchema = new mongoose.Schema(
     {
-        name: {
-            type: String,
-            required: true,
-            trim: true,
-        },
+        name: { type: String, required: true, trim: true },
 
         category: {
             type: String,
             required: true,
-            enum: [
-                "best-sellers",
-                "skin-care",
-                "hair-care",
-                "soaps",
-                "ingredients",
-                "classes",
-            ],
+            enum: ["skin-care", "hair-care", "soaps", "ingredients", "classes"],
         },
 
-        type: {
-            type: String,
-            default: "",
-            trim: true,
-        },
+        type: { type: String, default: "", trim: true },
+        price: { type: Number, default: 0, min: 0 },
+        oldPrice: { type: Number, default: 0, min: 0 },
+        image: { type: String, default: "" },
+        description: { type: String, default: "", trim: true },
+        ingredients: { type: String, default: "", trim: true },
 
-        // Starting/default price.
-        // When variants exist, Admin.jsx sends first variant price here.
-        price: {
-            type: Number,
-            default: 0,
-            min: 0,
-        },
+        benefits: { type: [String], default: [] },
+        methodOfUse: { type: [String], default: [] },
+        variants: { type: [variantSchema], default: [] },
 
-        image: {
-            type: String,
-            default: "",
-            trim: true,
-        },
+        isBestSeller: { type: Boolean, default: false },
+        bestSellerBadge: { type: String, default: "", trim: true },
+        bestSellerOrder: { type: Number, default: 0 },
 
-        description: {
-            type: String,
-            default: "",
-            trim: true,
-        },
-
-        // Different size / quantity + price options
-        variants: {
-            type: [variantSchema],
-            default: [],
-        },
-
-        isActive: {
-            type: Boolean,
-            default: true,
-        },
+        isActive: { type: Boolean, default: true },
     },
-    {
-        timestamps: true,
-    }
+    { timestamps: true }
 );
 
 module.exports = mongoose.model("Product", productSchema);
