@@ -1,14 +1,12 @@
-
-
-
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import "./Admin.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-const CATEGORY_MAP = { skincare: "skin-care", haircare: "hair-care", soaps: "soaps", ingredients: "ingredients", classes: "classes" };
+const CATEGORY_MAP = { bestsellers: "best-sellers", skincare: "skin-care", haircare: "hair-care", soaps: "soaps", ingredients: "ingredients", classes: "classes" };
 const CATEGORY_ALIASES = {
+    bestsellers: ["best-sellers", "best sellers", "bestsellers"],
     skincare: ["skin-care", "skincare", "skin care"], haircare: ["hair-care", "haircare", "hair care"],
     soaps: ["soaps", "soap", "artisan soaps"], ingredients: ["ingredients", "cosmetic ingredients"],
     classes: ["classes", "class", "book class"]
@@ -20,20 +18,13 @@ const normalizePublicImagePath = value => {
     if (/^(https?:|data:|blob:)/i.test(image)) return image;
     return image.startsWith("/") ? image : `/${image.replace(/^\.\//, "")}`;
 };
-const emptyVariant = { size: "", price: "", stock: "" };
+const emptyVariant = { label: "", price: "", stock: "" };
 const emptyForm = {
     name: "",
     type: "",
     price: "",
-    oldPrice: "",
     image: "",
     description: "",
-    ingredients: "",
-    benefits: "",
-    methodOfUse: "",
-    isBestSeller: false,
-    bestSellerBadge: "",
-    bestSellerOrder: "",
     variants: [],
 };
 
@@ -59,14 +50,7 @@ export default function Admin() {
     };
     useEffect(() => { fetchProducts() }, []);
 
-    const items = useMemo(() => {
-        if (category === "bestsellers") {
-            return [...products]
-                .filter((p) => Boolean(p.isBestSeller))
-                .sort((a, b) => Number(a.bestSellerOrder || 0) - Number(b.bestSellerOrder || 0));
-        }
-        return products.filter(p => (CATEGORY_ALIASES[category] || []).includes(norm(p.category)));
-    }, [products, category]);
+    const items = useMemo(() => products.filter(p => (CATEGORY_ALIASES[category] || []).includes(norm(p.category))), [products, category]);
     const filteredItems = useMemo(() => {
         const q = search.trim().toLowerCase();
         return q ? items.filter(i => [i.name, i.type, i.price, i.description].join(" ").toLowerCase().includes(q)) : items;
@@ -108,9 +92,9 @@ export default function Admin() {
         }
 
         const cleanVariants = (form.variants || [])
-            .filter((variant) => String(variant.size || "").trim())
+            .filter((variant) => String(variant.label || "").trim())
             .map((variant) => ({
-                size: String(variant.size).trim(),
+                label: String(variant.label).trim(),
                 price: Number(String(variant.price).replace(/[^0-9.]/g, "")) || 0,
                 stock: Number(String(variant.stock).replace(/[^0-9]/g, "")) || 0,
             }));
@@ -126,21 +110,11 @@ export default function Admin() {
 
         const payload = {
             name: form.name.trim(),
-            category:
-                category === "bestsellers"
-                    ? (products.find((p) => p._id === editingId)?.category || "skin-care")
-                    : CATEGORY_MAP[category],
+            category: CATEGORY_MAP[category],
             type: form.type.trim(),
             price: basePrice,
-            oldPrice: Number(String(form.oldPrice).replace(/[^0-9.]/g, "")) || 0,
             image: normalizePublicImagePath(form.image),
             description: form.description.trim(),
-            ingredients: form.ingredients.trim(),
-            benefits: form.benefits.split("\n").map((item) => item.trim()).filter(Boolean),
-            methodOfUse: form.methodOfUse.split("\n").map((item) => item.trim()).filter(Boolean),
-            isBestSeller: Boolean(form.isBestSeller),
-            bestSellerBadge: form.bestSellerBadge.trim(),
-            bestSellerOrder: Number(form.bestSellerOrder) || 0,
             variants: cleanVariants,
         };
         try {
@@ -161,18 +135,11 @@ export default function Admin() {
             name: item.name || "",
             type: item.type || "",
             price: item.price ?? "",
-            oldPrice: item.oldPrice ?? "",
             image: item.image || "",
             description: item.description || "",
-            ingredients: item.ingredients || "",
-            benefits: Array.isArray(item.benefits) ? item.benefits.join("\n") : "",
-            methodOfUse: Array.isArray(item.methodOfUse) ? item.methodOfUse.join("\n") : "",
-            isBestSeller: Boolean(item.isBestSeller),
-            bestSellerBadge: item.bestSellerBadge || "",
-            bestSellerOrder: item.bestSellerOrder ?? "",
             variants: Array.isArray(item.variants)
                 ? item.variants.map((variant) => ({
-                    size: variant.size || variant.label || "",
+                    label: variant.label || variant.size || "",
                     price: variant.price ?? "",
                     stock: variant.stock ?? 0,
                 }))
@@ -210,7 +177,7 @@ export default function Admin() {
                     className={category === "bestsellers" ? "active" : ""}
                     onClick={() => changeCategory("bestsellers")}
                 >
-                    <span>★</span>
+                    <span>00</span>
                     Best Seller Deals
                 </button>
 
@@ -283,235 +250,155 @@ export default function Admin() {
                     <Link to="/" className="org-admin-view-site">View live site ↗</Link>
                 </header>
 
-                {notice && <div className="org-admin-notice">{notice}</div>}
+                <section className="org-admin-form-card">
+                    {notice && (
+                        <div className="org-admin-notice" style={{ position: "relative", top: "auto", right: "auto", left: "auto", margin: "0 0 22px", zIndex: 2 }}>
+                            {notice}
+                        </div>
+                    )}
+                    <div className="org-admin-section-heading">
+                        <div>
+                            <span>{editingId ? "EDIT LISTING" : "ADD NEW LISTING"}</span>
+                            <h2>{editingId ? "Update product details" : "Create a new catalog item"}</h2>
+                        </div>
+                        {editingId && (
+                            <button type="button" className="org-admin-cancel" onClick={resetForm}>
+                                Cancel edit
+                            </button>
+                        )}
+                    </div>
 
-                {category !== "bestsellers" || editingId ? (
-                    <section className="org-admin-form-card">
-                        <div className="org-admin-section-heading">
-                            <div>
-                                <span>{editingId ? "EDIT LISTING" : "ADD NEW LISTING"}</span>
-                                <h2>{editingId ? "Update product details" : "Create a new catalog item"}</h2>
-                            </div>
-                            {editingId && (
-                                <button type="button" className="org-admin-cancel" onClick={resetForm}>
-                                    Cancel edit
+                    <form onSubmit={handleSubmit} className="org-admin-form">
+                        <label>
+                            <span>Product / class name *</span>
+                            <input
+                                value={form.name}
+                                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                placeholder="e.g. Neem Soap"
+                            />
+                        </label>
+
+                        <label>
+                            <span>Type / category *</span>
+                            <input
+                                value={form.type}
+                                onChange={(e) => setForm({ ...form, type: e.target.value })}
+                                placeholder="e.g. Herbal Soap"
+                            />
+                        </label>
+
+                        <label>
+                            <span>Price *</span>
+                            <input
+                                value={form.price}
+                                onChange={(e) => setForm({ ...form, price: e.target.value })}
+                                placeholder="e.g. Rs. 450"
+                            />
+                        </label>
+
+                        <div className="org-admin-variants-field">
+                            <div className="org-admin-variants-heading">
+                                <div>
+                                    <span>SIZE / QUANTITY OPTIONS</span>
+                                    <small>
+                                        Add different sizes with their own price and stock, e.g. 100 ml, 150 ml, 200 ml.
+                                    </small>
+                                </div>
+                                <button type="button" className="org-admin-add-variant" onClick={addVariant}>
+                                    + Add Size
                                 </button>
+                            </div>
+
+                            {(form.variants || []).map((variant, index) => (
+                                <div className="org-admin-variant-row" key={index}>
+                                    <label>
+                                        <span>Size / Quantity</span>
+                                        <input
+                                            value={variant.label}
+                                            onChange={(e) => updateVariant(index, "label", e.target.value)}
+                                            placeholder="100 ml"
+                                        />
+                                    </label>
+
+                                    <label>
+                                        <span>Price</span>
+                                        <input
+                                            value={variant.price}
+                                            onChange={(e) => updateVariant(index, "price", e.target.value)}
+                                            placeholder="700"
+                                            inputMode="decimal"
+                                        />
+                                    </label>
+
+                                    <label>
+                                        <span>Stock</span>
+                                        <input
+                                            value={variant.stock}
+                                            onChange={(e) => updateVariant(index, "stock", e.target.value)}
+                                            placeholder="15"
+                                            inputMode="numeric"
+                                        />
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        className="org-admin-remove-variant"
+                                        onClick={() => removeVariant(index)}
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            ))}
+
+                            {(form.variants || []).length > 0 && (
+                                <small className="org-admin-variant-note">
+                                    The first size price will also be used as the product's starting price.
+                                </small>
                             )}
                         </div>
 
-                        <form onSubmit={handleSubmit} className="org-admin-form">
-                            <label>
-                                <span>Product / class name *</span>
-                                <input
-                                    value={form.name}
-                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                    placeholder="e.g. Neem Soap"
-                                />
-                            </label>
+                        <label className="org-admin-image-field">
+                            <span>Image path</span>
+                            <input
+                                value={form.image}
+                                onChange={(e) => setForm({ ...form, image: e.target.value })}
+                                placeholder="/my-product.png"
+                            />
+                            <small>
+                                Image ko <b>frontend/public</b> folder mein rakho, phir yahan
+                                <b> /image-name.png</b> likho.
+                            </small>
+                        </label>
 
-                            <label>
-                                <span>Type / category *</span>
-                                <input
-                                    value={form.type}
-                                    onChange={(e) => setForm({ ...form, type: e.target.value })}
-                                    placeholder="e.g. Herbal Soap"
-                                />
-                            </label>
+                        <label className="org-admin-description-field">
+                            <span>{category === "bestsellers" ? "Old price for deal" : "Details / description"}</span>
+                            <textarea
+                                value={form.description}
+                                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                                placeholder="Short product details..."
+                            />
+                        </label>
 
-                            <label>
-                                <span>Price *</span>
-                                <input
-                                    value={form.price}
-                                    onChange={(e) => setForm({ ...form, price: e.target.value })}
-                                    placeholder="e.g. Rs. 450"
-                                />
-                            </label>
-
-                            <label>
-                                <span>Old / original price</span>
-                                <input
-                                    value={form.oldPrice}
-                                    onChange={(e) => setForm({ ...form, oldPrice: e.target.value })}
-                                    placeholder="e.g. 850"
-                                    inputMode="decimal"
-                                />
-                            </label>
-
-                            <div className="org-admin-best-seller-box">
-                                <label className="org-admin-checkbox-row">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.isBestSeller}
-                                        onChange={(e) => setForm({ ...form, isBestSeller: e.target.checked })}
-                                    />
-                                    <span>Show this product in “Best Seller Deals”</span>
-                                </label>
-
-                                {form.isBestSeller && (
-                                    <div className="org-admin-best-seller-fields">
-                                        <label>
-                                            <span>Deal badge</span>
-                                            <input
-                                                value={form.bestSellerBadge}
-                                                onChange={(e) => setForm({ ...form, bestSellerBadge: e.target.value })}
-                                                placeholder="e.g. -18% or HOT DEAL"
-                                            />
-                                        </label>
-
-                                        <label>
-                                            <span>Display order</span>
-                                            <input
-                                                value={form.bestSellerOrder}
-                                                onChange={(e) => setForm({ ...form, bestSellerOrder: e.target.value })}
-                                                placeholder="1"
-                                                inputMode="numeric"
-                                            />
-                                        </label>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="org-admin-variants-field">
-                                <div className="org-admin-variants-heading">
-                                    <div>
-                                        <span>SIZE / QUANTITY OPTIONS</span>
-                                        <small>
-                                            Add different sizes with their own price and stock, e.g. 100 ml, 150 ml, 200 ml.
-                                        </small>
-                                    </div>
-                                    <button type="button" className="org-admin-add-variant" onClick={addVariant}>
-                                        + Add Size
-                                    </button>
-                                </div>
-
-                                {(form.variants || []).map((variant, index) => (
-                                    <div className="org-admin-variant-row" key={index}>
-                                        <label>
-                                            <span>Size / Quantity</span>
-                                            <input
-                                                value={variant.size}
-                                                onChange={(e) => updateVariant(index, "size", e.target.value)}
-                                                placeholder="100 ml"
-                                            />
-                                        </label>
-
-                                        <label>
-                                            <span>Price</span>
-                                            <input
-                                                value={variant.price}
-                                                onChange={(e) => updateVariant(index, "price", e.target.value)}
-                                                placeholder="700"
-                                                inputMode="decimal"
-                                            />
-                                        </label>
-
-                                        <label>
-                                            <span>Stock</span>
-                                            <input
-                                                value={variant.stock}
-                                                onChange={(e) => updateVariant(index, "stock", e.target.value)}
-                                                placeholder="15"
-                                                inputMode="numeric"
-                                            />
-                                        </label>
-
-                                        <button
-                                            type="button"
-                                            className="org-admin-remove-variant"
-                                            onClick={() => removeVariant(index)}
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                ))}
-
-                                {(form.variants || []).length > 0 && (
-                                    <small className="org-admin-variant-note">
-                                        The first size price will also be used as the product's starting price.
-                                    </small>
-                                )}
-                            </div>
-
-                            <label className="org-admin-image-field">
-                                <span>Image path</span>
-                                <input
-                                    value={form.image}
-                                    onChange={(e) => setForm({ ...form, image: e.target.value })}
-                                    placeholder="/my-product.png"
-                                />
-                                <small>
-                                    Image ko <b>frontend/public</b> folder mein rakho, phir yahan
-                                    <b> /image-name.png</b> likho.
-                                </small>
-                            </label>
-
-                            <label className="org-admin-description-field">
-                                <span>Details / description</span>
-                                <textarea
-                                    value={form.description}
-                                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                                    placeholder="Short product details..."
-                                />
-                            </label>
-
-                            <label className="org-admin-description-field">
-                                <span>Ingredients</span>
-                                <textarea
-                                    value={form.ingredients}
-                                    onChange={(e) => setForm({ ...form, ingredients: e.target.value })}
-                                    placeholder="e.g. Aloe Vera, Neem, Rose Water..."
-                                />
-                            </label>
-
-                            <label className="org-admin-description-field">
-                                <span>Benefits — one benefit per line</span>
-                                <textarea
-                                    value={form.benefits}
-                                    onChange={(e) => setForm({ ...form, benefits: e.target.value })}
-                                    placeholder={"Helps cleanse gently\nSupports softer-looking skin\nRefreshing everyday care"}
-                                />
-                            </label>
-
-                            <label className="org-admin-description-field">
-                                <span>Method of use — one step per line</span>
-                                <textarea
-                                    value={form.methodOfUse}
-                                    onChange={(e) => setForm({ ...form, methodOfUse: e.target.value })}
-                                    placeholder={"Take a suitable amount\nApply gently\nRinse or use as directed"}
-                                />
-                            </label>
-
-                            <div className="org-admin-preview">
-                                <span>IMAGE PREVIEW</span>
-                                <div>
-                                    <img
-                                        src={normalizePublicImagePath(form.image)}
-                                        alt="Preview"
-                                        onError={(e) => {
-                                            e.currentTarget.onerror = null;
-                                            e.currentTarget.src = "/orgavera-logo.png";
-                                        }}
-                                    />
-                                </div>
-                            </div>
-
-                            <button type="submit" className="org-admin-save" disabled={saving}>
-                                {saving ? "Saving..." : editingId ? "Update Listing" : "Add Listing"}
-                                <span>→</span>
-                            </button>
-                        </form>
-                    </section>
-                ) : (
-                    <section className="org-admin-form-card">
-                        <div className="org-admin-section-heading">
+                        <div className="org-admin-preview">
+                            <span>IMAGE PREVIEW</span>
                             <div>
-                                <span>BEST SELLER DEALS</span>
-                                <h2>Edit a deal from the list below</h2>
-                                <p>Select <b>Edit</b> on any best seller to change its discount price, badge, display order, image, details, sizes, benefits, ingredients or method of use.</p>
+                                <img
+                                    src={normalizePublicImagePath(form.image)}
+                                    alt="Preview"
+                                    onError={(e) => {
+                                        e.currentTarget.onerror = null;
+                                        e.currentTarget.src = "/orgavera-logo.png";
+                                    }}
+                                />
                             </div>
                         </div>
-                    </section>
-                )}
+
+                        <button type="submit" className="org-admin-save" disabled={saving}>
+                            {saving ? "Saving..." : editingId ? "Update Listing" : "Add Listing"}
+                            <span>→</span>
+                        </button>
+                    </form>
+                </section>
 
                 <section className="org-admin-list-section">
                     <div className="org-admin-list-head">
@@ -566,26 +453,13 @@ export default function Admin() {
                                                 <div className="org-admin-table-variants">
                                                     {item.variants.map((variant, index) => (
                                                         <small key={index}>
-                                                            {variant.size || variant.label}: Rs. {variant.price} · Stock {variant.stock ?? 0}
+                                                            {variant.label || variant.size}: Rs. {variant.price} · Stock {variant.stock ?? 0}
                                                         </small>
                                                     ))}
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="org-admin-details-cell">
-                                            {category === "bestsellers" ? (
-                                                <>
-                                                    <strong>{item.bestSellerBadge || "Deal"}</strong>
-                                                    <small style={{ display: "block", marginTop: 6 }}>
-                                                        Order: {item.bestSellerOrder ?? 0}
-                                                        {Number(item.oldPrice || 0) > 0 ? ` · Old price: Rs. ${item.oldPrice}` : ""}
-                                                    </small>
-                                                    <small style={{ display: "block", marginTop: 6 }}>
-                                                        {item.description || "—"}
-                                                    </small>
-                                                </>
-                                            ) : (item.description || "—")}
-                                        </td>
+                                        <td className="org-admin-details-cell">{item.description || "—"}</td>
                                         <td>
                                             <div className="org-admin-actions">
                                                 <button onClick={() => editItem(item)}>Edit</button>
