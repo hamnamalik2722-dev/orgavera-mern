@@ -1595,30 +1595,6 @@ function Home() {
           </div>
         </section>
 
-        {/* ================= MOVING TEXT ================= */}
-
-        <section className="marquee">
-          <div className="marquee-track">
-            <span>Premium Botanical Skincare</span>
-            <b>✦</b>
-
-            <span>Clean Beauty</span>
-            <b>✦</b>
-
-            <span>Cruelty-Free</span>
-            <b>✦</b>
-
-            <span>Sulfate & Paraben Free</span>
-            <b>✦</b>
-
-            <span>Handmade in Small Batches</span>
-            <b>✦</b>
-
-            <span>Inspired by Nature</span>
-            <b>✦</b>
-          </div>
-        </section>
-
         {/* ================= TOP SELLERS ================= */}
 
         <section className="top-sellers-section" id="top-sellers">
@@ -1626,17 +1602,16 @@ function Home() {
             <div className="top-sellers-kicker">
               <span></span>
               <b>✦</b>
-              <p>TOP SELLERS</p>
+              <p>EXCLUSIVE DEALS</p>
               <span></span>
             </div>
 
             <h2>
-              Our <em>Best Sellers</em>
+              Best Seller <em>Deals</em>
             </h2>
 
             <p className="top-sellers-description">
-              Loved by our customers. Made with nature. Created for beautiful
-              everyday rituals.
+              Customer favourites with special offers — thoughtfully made for your everyday rituals.
             </p>
           </div>
 
@@ -1694,6 +1669,31 @@ function Home() {
               View All Products
               <span>→</span>
             </a>
+          </div>
+        </section>
+
+
+        {/* ================= MOVING TEXT ================= */}
+
+        <section className="marquee">
+          <div className="marquee-track">
+            <span>Premium Botanical Skincare</span>
+            <b>✦</b>
+
+            <span>Clean Beauty</span>
+            <b>✦</b>
+
+            <span>Cruelty-Free</span>
+            <b>✦</b>
+
+            <span>Sulfate & Paraben Free</span>
+            <b>✦</b>
+
+            <span>Handmade in Small Batches</span>
+            <b>✦</b>
+
+            <span>Inspired by Nature</span>
+            <b>✦</b>
           </div>
         </section>
 
