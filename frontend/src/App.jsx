@@ -56,7 +56,7 @@ const skinCareProducts = [
   {
     id: "skin-2",
     name: "SunBlock ",
-    type: "Face Mask",
+    type: "Sun Care",
     price: "Rs. 750",
     image: "glow-mask.png",
   },
@@ -70,7 +70,7 @@ const skinCareProducts = [
   {
     id: "skin-4",
     name: "Glow Mask",
-    type: "Sun Care",
+    type: "Face Mask",
     price: "Rs. 800",
     image: "glow mask.png",
   },
@@ -109,7 +109,7 @@ const hairCareProducts = [
 ];
 
 const defaultAdminCatalog = {
-  bestsellers: products.map((item) => ({ ...item, type: item.category, description: item.oldPrice || "" })),
+  bestsellers: products.map((item) => ({ ...item, type: item.category, description: "" })),
   skincare: skinCareProducts.map((item) => ({ ...item, description: item.description || "" })),
   haircare: hairCareProducts.map((item) => ({ ...item, description: item.description || "" })),
   soaps: [
@@ -278,11 +278,16 @@ const normalizeCatalogShape = (catalog, fallback = defaultAdminCatalog) => {
   const safeFallback = fallback && typeof fallback === "object" ? fallback : {};
 
   return CATALOG_SECTIONS.reduce((result, key) => {
-    result[key] = Array.isArray(source[key])
+    const items = Array.isArray(source[key])
       ? source[key]
       : Array.isArray(safeFallback[key])
         ? safeFallback[key]
         : [];
+
+    result[key] = items.map((item) => ({
+      ...item,
+      type: getSafeProductType(item),
+    }));
     return result;
   }, {});
 };
@@ -363,7 +368,7 @@ const buildCatalogFromApi = (apiProducts) => {
           ? `Rs. ${Number(item.oldPrice).toLocaleString()}`
           : "",
       image: normalizePublicImagePath(item.image),
-      type: item.type || item.category || "",
+      type: getSafeProductType(item),
       description: item.description || "",
       ingredients: item.ingredients || "",
       benefits: Array.isArray(item.benefits) ? item.benefits : [],
@@ -387,19 +392,231 @@ const buildCatalogFromApi = (apiProducts) => {
 };
 
 const fetchCatalogFromApi = async () => {
-  const response = await fetch(`${API_URL}/api/products`);
-  const result = await response.json();
+  let lastError = null;
 
-  if (!response.ok) {
-    throw new Error(result.message || "Could not load products.");
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await fetch(`${API_URL}/api/products`);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Could not load products.");
+      }
+
+      return buildCatalogFromApi(result.data);
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+      }
+    }
   }
 
-  return buildCatalogFromApi(result.data);
+  throw lastError || new Error("Could not load products.");
 };
 
 
 
-function ProductDetailModal({ product, onClose, onAddToCart }) {
+
+const STORE_CONTACT = {
+  primaryWhatsApp: "923709301194",
+  secondaryWhatsApp: "923379912484",
+  instagram: "https://www.instagram.com/orgavera?igsh=MTQwaWp3NWRndXc1Mw==",
+  facebook: "https://www.facebook.com/share/1GuDQJkn9n/",
+  tiktok: "https://www.tiktok.com/@organicherbelcosmatics?_r=1&_t=ZS-98TSiDvTEmr",
+};
+
+const DELIVERY_CHARGE = 280;
+
+const openStoreWhatsApp = (message, number = STORE_CONTACT.primaryWhatsApp) => {
+  const encoded = encodeURIComponent(message);
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const url = mobile
+    ? `https://wa.me/${number}?text=${encoded}`
+    : `https://web.whatsapp.com/send?phone=${number}&text=${encoded}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+};
+
+const normalizeCustomerPhone = (value) =>
+  String(value || "").replace(/[^\d+]/g, "");
+
+const isValidPakistanMobile = (value) => {
+  const normalized = normalizeCustomerPhone(value).replace(/^\+/, "");
+  return /^(?:92|0)?3\d{9}$/.test(normalized);
+};
+
+const getSafeProductType = (item) => {
+  const name = String(item?.name || "").trim().toLowerCase();
+  if (name.includes("sunblock") || name.includes("sun block") || name.includes("sunscreen")) {
+    return "Sun Care";
+  }
+  if (name.includes("glow mask") || name.includes("face mask")) {
+    return "Face Mask";
+  }
+  return item?.type || item?.category || "";
+};
+
+const STORE_INFO_CONTENT = {
+  order: {
+    eyebrow: "ORDER PROCESS",
+    title: "How your ORGAVERA order is confirmed",
+    body:
+      "The website prepares your selected products and opens a complete order summary in WhatsApp. Your order is confirmed only after ORGAVERA replies and confirms product availability, delivery charges and the final payable amount.",
+  },
+  delivery: {
+    eyebrow: "DELIVERY",
+    title: "Clear delivery information before dispatch",
+    body:
+      "ORGAVERA delivers across Pakistan. A flat delivery charge of Rs. 280 is automatically added to your order total. Product availability and expected delivery timing are confirmed on WhatsApp before dispatch.",
+  },
+  returns: {
+    eyebrow: "RETURNS & EXCHANGES",
+    title: "Need help after receiving your order?",
+    body:
+      "For a return or exchange request, contact ORGAVERA on WhatsApp with your order details and the product condition. Support will confirm eligibility and the next steps before you send anything back.",
+  },
+  privacy: {
+    eyebrow: "PRIVACY",
+    title: "Your checkout details stay simple",
+    body:
+      "Your cart is saved in your browser. The name, phone number and address you enter are used to prepare your WhatsApp order message. This website does not ask for or process card-payment details.",
+  },
+};
+
+function StoreInfoModal({ topic, onClose }) {
+  if (!topic || !STORE_INFO_CONTENT[topic]) return null;
+  const content = STORE_INFO_CONTENT[topic];
+
+  return (
+    <div className="store-info-backdrop" onClick={onClose} role="presentation">
+      <section
+        className="store-info-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={content.title}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="store-info-close" onClick={onClose} aria-label="Close">
+          ×
+        </button>
+        <p>{content.eyebrow}</p>
+        <h2>{content.title}</h2>
+        <span>{content.body}</span>
+        <a
+          href={`https://wa.me/${STORE_CONTACT.primaryWhatsApp}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Ask ORGAVERA on WhatsApp <b>↗</b>
+        </a>
+      </section>
+    </div>
+  );
+}
+
+function MobileShopMenu({ open, onToggle, onClose, onCart }) {
+  return (
+    <>
+      <button
+        type="button"
+        className="mobile-menu-toggle"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={open ? "Close navigation menu" : "Open navigation menu"}
+      >
+        <span></span><span></span><span></span>
+      </button>
+
+      <div
+        className={`mobile-menu-backdrop ${open ? "show" : ""}`}
+        onClick={onClose}
+        aria-hidden={!open}
+      ></div>
+
+      <aside className={`mobile-shop-menu ${open ? "open" : ""}`} aria-hidden={!open}>
+        <div className="mobile-shop-menu-head">
+          <div>
+            <small>ORGAVERA</small>
+            <strong>Shop & Explore</strong>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close menu">×</button>
+        </div>
+
+        <nav>
+          <Link to="/" onClick={onClose}>Home <span>↗</span></Link>
+          <Link to="/collection/skin-care" onClick={onClose}>Skin Care <span>↗</span></Link>
+          <Link to="/collection/hair-care" onClick={onClose}>Hair Care <span>↗</span></Link>
+          <Link to="/collection/soaps" onClick={onClose}>Artisan Soaps <span>↗</span></Link>
+          <Link to="/collection/cosmetic-ingredients" onClick={onClose}>Ingredients <span>↗</span></Link>
+          <Link to="/classes" onClick={onClose}>Book a Class <span>↗</span></Link>
+        </nav>
+
+        <button
+          type="button"
+          className="mobile-menu-cart"
+          onClick={() => {
+            onClose();
+            onCart();
+          }}
+        >
+          Open Cart <span>→</span>
+        </button>
+
+        <a
+          className="mobile-menu-help"
+          href={`https://wa.me/${STORE_CONTACT.primaryWhatsApp}?text=${encodeURIComponent("Hi ORGAVERA, I need help choosing a product.")}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Need product guidance? WhatsApp us ↗
+        </a>
+      </aside>
+    </>
+  );
+}
+
+function SocialProofSection() {
+  return (
+    <section className="social-proof-section reveal" aria-label="ORGAVERA social proof and support">
+      <div className="social-proof-copy">
+        <p>REAL BRAND UPDATES · DIRECT SUPPORT</p>
+        <h2>
+          See ORGAVERA
+          <br />
+          <em>in real life.</em>
+        </h2>
+        <span>
+          Follow our social pages for product launches, packing updates, restocks
+          and behind-the-scenes content. Customer feedback is shared only when
+          it is genuine and connected to a real customer experience.
+        </span>
+      </div>
+
+      <div className="social-proof-actions">
+        <a href={STORE_CONTACT.instagram} target="_blank" rel="noreferrer">
+          <small>FOLLOW</small><strong>Instagram</strong><b>↗</b>
+        </a>
+        <a href={STORE_CONTACT.facebook} target="_blank" rel="noreferrer">
+          <small>FOLLOW</small><strong>Facebook</strong><b>↗</b>
+        </a>
+        <a href={STORE_CONTACT.tiktok} target="_blank" rel="noreferrer">
+          <small>FOLLOW</small><strong>TikTok</strong><b>↗</b>
+        </a>
+        <a
+          href={`https://wa.me/${STORE_CONTACT.primaryWhatsApp}?text=${encodeURIComponent("Hi ORGAVERA, I want to share feedback about my order.")}`}
+          target="_blank"
+          rel="noreferrer"
+          className="social-proof-feedback"
+        >
+          <small>HAVE AN ORDER?</small><strong>Share your feedback</strong><b>→</b>
+        </a>
+      </div>
+    </section>
+  );
+}
+
+
+function ProductDetailModal({ product, onClose, onAddToCart, onAskPrice }) {
   const [selectedLabel, setSelectedLabel] = useState("");
   const [quantity, setQuantity] = useState(1);
 
@@ -439,7 +656,7 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
     : getNumericPrice(product.price);
 
   const totalPrice = unitPrice * quantity;
-  const oldPrice = getNumericPrice(product.oldPrice || product.description);
+  const oldPrice = getNumericPrice(product.oldPrice);
   const discount =
     oldPrice > unitPrice && unitPrice > 0
       ? Math.round(((oldPrice - unitPrice) / oldPrice) * 100)
@@ -452,30 +669,30 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
 
   const defaultBenefits = isHair
     ? [
-      "Helps nourish hair from root to tip",
-      "Supports softer, smoother-looking hair",
-      "Helps reduce the look of dryness and frizz",
-      "Adds a healthy-looking natural shine",
+      "Designed for an easy everyday haircare routine",
+      "Use according to the product directions shown",
+      "Choose the size that suits your routine",
+      "Contact ORGAVERA if you need product guidance",
     ]
     : isSkin
       ? [
-        "Made for a simple everyday skincare routine",
-        "Helps support a fresh, cared-for look",
-        "Thoughtfully formulated for regular use",
-        "Leaves skin feeling clean and comfortable",
+        "Designed for a simple everyday skincare routine",
+        "Use according to the product directions shown",
+        "Choose the size that suits your routine",
+        "Contact ORGAVERA if you need product guidance",
       ]
       : isSoap
         ? [
-          "Handcrafted for everyday cleansing",
-          "Creates a refreshing self-care ritual",
-          "Made with a botanical-inspired approach",
-          "Leaves skin feeling clean and refreshed",
+          "Made for everyday cleansing",
+          "Use as part of your preferred body-care routine",
+          "See the product details for ingredient information",
+          "Contact ORGAVERA if you need product guidance",
         ]
         : [
-          "Thoughtfully made by ORGAVERA",
-          "Designed for everyday use",
-          "Simple, premium product experience",
-          "Carefully selected formulation approach",
+          "Product details are shown for easier selection",
+          "Choose the option that matches your requirement",
+          "Direct WhatsApp support is available",
+          "Delivery information is confirmed before dispatch",
         ];
 
   const defaultHowToUse = isHair
@@ -973,7 +1190,7 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
               />
               <div className="org-natural-seal">
                 <b>❧</b>
-                100%<br />NATURAL
+                ORGAVERA<br />PRODUCT
               </div>
             </div>
           </div>
@@ -987,20 +1204,20 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
             <h2 className="org-product-title">{product.name}</h2>
 
             <div className="org-product-rating">
-              <span className="org-product-stars">★★★★★</span>
-              <strong>Customer Favourite</strong>
+              <span className="org-product-detail-type">{getSafeProductType(product) || "ORGAVERA Product"}</span>
+              <strong>Product details & ordering support</strong>
             </div>
 
             <div className="org-product-trust">
-              <span><b>❧</b> Natural Care</span>
-              <span><b>✓</b> Thoughtfully Made</span>
-              <span><b>◇</b> Premium Quality</span>
-              <span><b>♡</b> Cruelty Free</span>
+              <span><b>✓</b> Clear product details</span>
+              <span><b>◇</b> Size options where available</span>
+              <span><b>⌂</b> Pakistan delivery</span>
+              <span><b>W</b> WhatsApp support</span>
             </div>
 
             <div className="org-product-price-row">
               <strong>
-                {unitPrice > 0 ? `Rs. ${unitPrice.toLocaleString()}` : "Ask for price"}
+                {unitPrice > 0 ? `Rs. ${unitPrice.toLocaleString()}` : "Current price on WhatsApp"}
               </strong>
 
               {oldPrice > unitPrice && unitPrice > 0 && (
@@ -1046,7 +1263,7 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
               </div>
             ) : (
               <div className="org-product-no-variants">
-                Add sizes from Admin Panel, e.g. 100ml, 150ml, 300ml, 500ml.
+                Size options are not listed for this product. Contact ORGAVERA if you need help choosing.
               </div>
             )}
 
@@ -1077,42 +1294,54 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
                 <strong>
                   {totalPrice > 0
                     ? `Rs. ${totalPrice.toLocaleString()}`
-                    : "Confirm"}
+                    : "WhatsApp"}
                 </strong>
               </div>
             </div>
 
-            <div className="org-product-buttons">
-              <button
-                type="button"
-                className="org-product-add"
-                onClick={() => {
-                  onAddToCart(product, selectedLabel, quantity);
-                  onClose();
-                }}
-              >
-                🛒 ADD TO CART ·{" "}
-                {totalPrice > 0
-                  ? `Rs. ${totalPrice.toLocaleString()}`
-                  : "CONFIRM PRICE"}
-              </button>
+            <div className={`org-product-buttons ${totalPrice <= 0 ? "price-inquiry-only" : ""}`}>
+              {totalPrice > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    className="org-product-add"
+                    onClick={() => {
+                      onAddToCart(product, selectedLabel, quantity);
+                      onClose();
+                    }}
+                  >
+                    🛒 ADD TO CART · Rs. {totalPrice.toLocaleString()}
+                  </button>
 
-              <button
-                type="button"
-                className="org-product-buy"
-                onClick={() => {
-                  onAddToCart(product, selectedLabel, quantity);
-                  onClose();
-                }}
-              >
-                BUY NOW
-              </button>
+                  <button
+                    type="button"
+                    className="org-product-buy"
+                    onClick={() => {
+                      onAddToCart(product, selectedLabel, quantity);
+                      onClose();
+                    }}
+                  >
+                    BUY NOW
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="org-product-add org-product-price-inquiry"
+                  onClick={() => {
+                    onAskPrice?.(product, selectedLabel);
+                    onClose();
+                  }}
+                >
+                  GET CURRENT PRICE ON WHATSAPP →
+                </button>
+              )}
             </div>
 
             <div className="org-product-delivery">
               <strong>🚚 Delivery across Pakistan</strong>
-              <span>Secure order</span>
-              <span>WhatsApp support</span>
+              <span>Charges & timing confirmed before dispatch</span>
+              <span>Order confirmed on WhatsApp</span>
             </div>
           </div>
         </div>
@@ -1165,9 +1394,9 @@ function ProductDetailModal({ product, onClose, onAddToCart }) {
                 Premium botanical care by ORGAVERA
               </span>
             </div>
-            <span>❧ Thoughtfully Made</span>
-            <span>✦ Premium Quality</span>
-            <span>♡ Everyday Care</span>
+            <span>❧ Product Details</span>
+            <span>✦ Direct Support</span>
+            <span>W WhatsApp Confirmation</span>
             <span>⌂ Pakistan Delivery</span>
           </div>
         </div>
@@ -1197,6 +1426,8 @@ function Home() {
   const [checkoutStep, setCheckoutStep] = useState(1);
   const [selectedVariants, setSelectedVariants] = useState({});
   const [detailProduct, setDetailProduct] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [policyTopic, setPolicyTopic] = useState("");
 
   const updateCart = (updater) => {
     setCart((currentCart) => {
@@ -1281,15 +1512,36 @@ function Home() {
     );
   };
 
-  const getHomeDisplayPrice = (product) => {
+  const getHomeUnitPrice = (product) => {
     const variant = getSelectedProductVariant(product);
-    const numericPrice = variant
+    return variant
       ? getNumericPrice(variant.price)
       : getNumericPrice(product.price);
+  };
 
+  const getHomeDisplayPrice = (product) => {
+    const numericPrice = getHomeUnitPrice(product);
     return numericPrice > 0
       ? `Rs. ${numericPrice.toLocaleString()}`
-      : String(product.price || "Ask for price");
+      : "Get current price";
+  };
+
+  const openPriceInquiry = (product, forcedVariantLabel = "") => {
+    const variants = getProductVariants(product);
+    const fallbackVariant = getSelectedProductVariant(product);
+    const variant =
+      forcedVariantLabel
+        ? variants.find(
+          (item) =>
+            String(item.label || item.size || "").trim() === forcedVariantLabel
+        ) || fallbackVariant
+        : fallbackVariant;
+    const variantLabel = variant
+      ? String(variant.label || variant.size || "").trim()
+      : "";
+
+    const message = `Hi ORGAVERA, please share the current price and availability for ${product.name}${variantLabel ? ` (${variantLabel})` : ""}.`;
+    openStoreWhatsApp(message);
   };
 
   const renderHomeVariantOptions = (product) => {
@@ -1370,6 +1622,11 @@ function Home() {
       ? getNumericPrice(variant.price)
       : getNumericPrice(product.price);
 
+    if (unitPrice <= 0) {
+      openPriceInquiry(product, variantLabel);
+      return;
+    }
+
     const cartId = variantLabel
       ? `${product.id}::${variantLabel}`
       : product.id;
@@ -1441,28 +1698,83 @@ function Home() {
     [cart]
   );
 
-  const placeWhatsAppOrder = (number) => {
+  const deliveryCharge = cart.length ? DELIVERY_CHARGE : 0;
+  const grandTotal = cartTotal + deliveryCharge;
+
+  const placeWhatsAppOrder = (number = STORE_CONTACT.primaryWhatsApp) => {
     if (!cart.length) {
       setNotice("Your cart is empty");
+      window.setTimeout(() => setNotice(""), 2200);
       return;
     }
 
     if (!customer.name.trim() || !customer.phone.trim() || !customer.address.trim()) {
       setNotice("Please enter name, phone and delivery address");
+      window.setTimeout(() => setNotice(""), 2200);
+      return;
+    }
+
+    if (!isValidPakistanMobile(customer.phone)) {
+      setNotice("Please enter a valid Pakistani mobile number");
+      window.setTimeout(() => setNotice(""), 2400);
+      return;
+    }
+
+    const hasUnpricedItems = cart.some(
+      (item) => Number(item.unitPrice || getNumericPrice(item.price)) <= 0
+    );
+
+    if (hasUnpricedItems) {
+      setNotice("Please confirm prices for all products before placing the order");
+      window.setTimeout(() => setNotice(""), 2800);
       return;
     }
 
     const productLines = cart
-      .map((item) => {
+      .map((item, index) => {
         const unit = Number(item.unitPrice || getNumericPrice(item.price));
+        const qty = Number(item.quantity || 1);
+        const lineTotal = unit * qty;
         const variant = item.variantLabel ? ` (${item.variantLabel})` : "";
-        return `• ${item.name}${variant} × ${item.quantity} — Rs. ${(unit * item.quantity).toLocaleString()}`;
+
+        return [
+          `${index + 1}. ${item.name}${variant}`,
+          `   Unit Price: Rs. ${unit.toLocaleString()}`,
+          `   Quantity: ${qty}`,
+          `   Line Total: Rs. ${lineTotal.toLocaleString()}`,
+        ].join("\n");
       })
-      .join("\n");
+      .join("\n\n");
 
-    const message = `🌿 ORGAVERA ORDER\n\nCustomer Name: ${customer.name}\nPhone: ${customer.phone}\nAddress: ${customer.address}\n\nProducts:\n${productLines}\n\nTotal: Rs. ${cartTotal}\n\nPlease confirm my order. Thank you!`;
+    const message = [
+      "━━━━━━━━━━━━━━━━━━━━━━━━",
+      "🌿 *ORGAVERA - ORDER BILL*",
+      "━━━━━━━━━━━━━━━━━━━━━━━━",
+      "",
+      "*CUSTOMER DETAILS*",
+      `Name: ${customer.name.trim()}`,
+      `Phone: ${customer.phone.trim()}`,
+      `Address: ${customer.address.trim()}`,
+      "",
+      "────────────────────────",
+      "*ORDER DETAILS*",
+      "────────────────────────",
+      productLines,
+      "",
+      "────────────────────────",
+      "*BILL SUMMARY*",
+      "────────────────────────",
+      `Products Subtotal: Rs. ${cartTotal.toLocaleString()}`,
+      `Delivery Charges: Rs. ${DELIVERY_CHARGE.toLocaleString()}`,
+      `*GRAND TOTAL: Rs. ${grandTotal.toLocaleString()}*`,
+      "────────────────────────",
+      "",
+      "Please confirm product availability and expected delivery time.",
+      "",
+      "Thank you for shopping with ORGAVERA 🌿",
+    ].join("\n");
 
-    window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    openStoreWhatsApp(message, number);
   };
   useEffect(() => {
     const revealElements = document.querySelectorAll(".reveal");
@@ -1511,8 +1823,12 @@ function Home() {
         </nav>
 
         <div className="navbar-actions">
-
-
+          <MobileShopMenu
+            open={isMobileMenuOpen}
+            onToggle={() => setIsMobileMenuOpen((current) => !current)}
+            onClose={() => setIsMobileMenuOpen(false)}
+            onCart={() => setIsCartOpen(true)}
+          />
 
           <button type="button" className="navbar-button cart-nav-button" onClick={() => setIsCartOpen(true)}>
             Cart
@@ -1604,12 +1920,16 @@ function Home() {
                   <span className="discount-badge">{product.discount}</span>
 
                   <img
-                    src={product.image}
+                    src={normalizePublicImagePath(product.image)}
                     alt={`${product.name} by ORGAVERA`}
                     className={`top-seller-image top-seller-image-${product.id}`}
                     loading="lazy"
                     decoding="async"
                     draggable="false"
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = "/orgavera-logo.png";
+                    }}
                   />
 
                   <div className="top-seller-image-shade" aria-hidden="true"></div>
@@ -1635,6 +1955,10 @@ function Home() {
                     <span></span>
                   </div>
 
+                  {product.description && !/^Rs\./i.test(String(product.description).trim()) && (
+                    <span className="top-seller-note">{product.description}</span>
+                  )}
+
                   {renderHomeVariantOptions(product)}
 
                   <div className="top-seller-price">
@@ -1652,6 +1976,22 @@ function Home() {
               <span>→</span>
             </a>
           </div>
+        </section>
+
+        <section className="purchase-confidence-strip" aria-label="Ordering information">
+          <button type="button" onClick={() => setPolicyTopic("order")}>
+            <b>W</b><span><strong>WhatsApp confirmation</strong><small>Order is confirmed after our reply</small></span>
+          </button>
+          <button type="button" onClick={() => setPolicyTopic("delivery")}>
+            <b>⌂</b><span><strong>Pakistan delivery · Rs. 280</strong><small>Automatically added to your final bill</small></span>
+          </button>
+          <a
+            href={`https://wa.me/${STORE_CONTACT.primaryWhatsApp}?text=${encodeURIComponent("Hi ORGAVERA, I need help choosing the right product.")}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <b>?</b><span><strong>Need help choosing?</strong><small>Get direct product guidance</small></span>
+          </a>
         </section>
 
         {/* ================= SHOP BY CATEGORY ================= */}
@@ -1729,11 +2069,11 @@ function Home() {
             </div>
 
             <div className="home-category-trust-strip reveal show">
-              <div><span>❧</span><p><b>100% Natural</b><small>Pure &amp; Safe</small></p></div>
-              <div><span>♨</span><p><b>Handcrafted</b><small>Made with Care</small></p></div>
-              <div><span>⚗</span><p><b>Chemical Free</b><small>No Harmful Additives</small></p></div>
-              <div><span>♧</span><p><b>Ethical Sourcing</b><small>Responsible &amp; Sustainable</small></p></div>
-              <div><span>♡</span><p><b>Cruelty Free</b><small>Not Tested on Animals</small></p></div>
+              <div><span>❧</span><p><b>Botanical-Inspired</b><small>Care made for daily routines</small></p></div>
+              <div><span>♨</span><p><b>Small-Batch Care</b><small>Thoughtfully prepared</small></p></div>
+              <div><span>≡</span><p><b>Clear Details</b><small>Sizes, prices &amp; use guidance</small></p></div>
+              <div><span>W</span><p><b>Direct Support</b><small>WhatsApp product guidance</small></p></div>
+              <div><span>⌂</span><p><b>Pakistan Delivery</b><small>Flat Rs. 280 delivery charge</small></p></div>
             </div>
           </div>
         </section>
@@ -1742,22 +2082,22 @@ function Home() {
 
         <section className="marquee">
           <div className="marquee-track">
-            <span>Premium Botanical Skincare</span>
+            <span>Botanical-Inspired Care</span>
             <b>✦</b>
 
-            <span>Clean Beauty</span>
+            <span>Thoughtfully Made</span>
             <b>✦</b>
 
-            <span>Cruelty-Free</span>
+            <span>Direct WhatsApp Support</span>
             <b>✦</b>
 
-            <span>Sulfate & Paraben Free</span>
+            <span>Skincare &amp; Haircare</span>
             <b>✦</b>
 
-            <span>Handmade in Small Batches</span>
+            <span>Small-Batch Care</span>
             <b>✦</b>
 
-            <span>Inspired by Nature</span>
+            <span>Pakistan Delivery · Rs. 280</span>
             <b>✦</b>
           </div>
         </section>
@@ -1908,9 +2248,14 @@ function Home() {
                       type="button"
                       className="collection-order"
                       aria-label={`Add ${product.name} to cart`}
-                      onClick={(event) => { event.stopPropagation(); addToCart(product); }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (getHomeUnitPrice(product) > 0) addToCart(product);
+                        else openPriceInquiry(product);
+                      }}
+                      title={getHomeUnitPrice(product) > 0 ? "Add to cart" : "Get current price on WhatsApp"}
                     >
-                      +
+                      {getHomeUnitPrice(product) > 0 ? "+" : "?"}
                     </button>
                   </div>
 
@@ -1963,9 +2308,14 @@ function Home() {
                       type="button"
                       className="collection-order"
                       aria-label={`Add ${product.name} to cart`}
-                      onClick={(event) => { event.stopPropagation(); addToCart(product); }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (getHomeUnitPrice(product) > 0) addToCart(product);
+                        else openPriceInquiry(product);
+                      }}
+                      title={getHomeUnitPrice(product) > 0 ? "Add to cart" : "Get current price on WhatsApp"}
                     >
-                      +
+                      {getHomeUnitPrice(product) > 0 ? "+" : "?"}
                     </button>
                   </div>
 
@@ -2048,9 +2398,14 @@ function Home() {
                           type="button"
                           className="collection-order"
                           aria-label={`Add ${item.name} to cart`}
-                          onClick={(event) => { event.stopPropagation(); addToCart(item); }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (getHomeUnitPrice(item) > 0) addToCart(item);
+                            else openPriceInquiry(item);
+                          }}
+                          title={getHomeUnitPrice(item) > 0 ? "Add to cart" : "Get current price on WhatsApp"}
                         >
-                          +
+                          {getHomeUnitPrice(item) > 0 ? "+" : "?"}
                         </button>
                       )}
                     </div>
@@ -2083,47 +2438,12 @@ function Home() {
 
         </section>
 
-        {/* ================= STORY SECTION ================= */}
-
-        <section className="story-section reveal">
-          <div className="story-visual">
-            <div className="story-ring"></div>
-
-            <div className="story-logo-card">
-              <img src="/orgavera-logo.png" alt="ORGAVERA logo" />
-            </div>
-          </div>
-
-          <div className="story-text">
-            <p className="section-label">02 / OUR STORY</p>
-
-            <h2>
-              From nature,
-              <br />
-              <em>with purpose.</em>
-            </h2>
-
-            <div className="gold-line"></div>
-
-            <p>
-              ORGAVERA began with a simple belief: personal care should feel
-              honest, beautiful and connected to nature.
-            </p>
-
-            <p>
-              We use familiar botanicals and transform them into thoughtfully
-              prepared products for modern skincare and haircare routines.
-            </p>
-
-            <a href="#contact" className="text-link">
-              Meet the brand →
-            </a>
-          </div>
-        </section>
+        <SocialProofSection />
 
         {/* ================= INGREDIENTS ================= */}
 
         <section className="ingredients-section" id="ingredients">
+
           <div className="ingredients-glow ingredients-glow-one"></div>
           <div className="ingredients-glow ingredients-glow-two"></div>
 
@@ -2335,7 +2655,11 @@ function Home() {
                         <div className="cart-item-copy">
                           <small>{item.variantLabel || item.category || item.type || "ORGAVERA Care"}</small>
                           <h4>{item.name}</h4>
-                          <p>{item.price} each</p>
+                          <p>
+                            {Number(item.unitPrice || getNumericPrice(item.price)) > 0
+                              ? `${item.price} each`
+                              : "Current price to be confirmed"}
+                          </p>
                           <div className="cart-quantity" aria-label={`Quantity of ${item.name}`}>
                             <button type="button" onClick={() => updateQuantity(item.id, -1)}>−</button>
                             <span>{item.quantity}</span>
@@ -2343,17 +2667,20 @@ function Home() {
                           </div>
                         </div>
                         <strong className="cart-line-total">
-                          Rs. {(Number(item.unitPrice || getNumericPrice(item.price)) * item.quantity).toLocaleString()}
+                          {Number(item.unitPrice || getNumericPrice(item.price)) > 0
+                            ? `Rs. ${(Number(item.unitPrice || getNumericPrice(item.price)) * item.quantity).toLocaleString()}`
+                            : "Confirm price"}
                         </strong>
                         <button type="button" className="cart-remove" onClick={() => removeFromCart(item.id)}>×</button>
                       </article>
                     ))}
                   </div>
 
-                  <div className="review-total-card">
-                    <div><span>Subtotal</span><b>Rs. {cartTotal}</b></div>
-                    <div><span>Delivery charges</span><b>Confirmed on WhatsApp</b></div>
-                    <div className="review-grand-total"><span>Total Amount</span><strong>Rs. {cartTotal}</strong></div>
+                  <div className="review-total-card order-bill-summary-card">
+                    <div><span>Products subtotal</span><b>Rs. {cartTotal.toLocaleString()}</b></div>
+                    <div><span>Delivery charges</span><b>Rs. {deliveryCharge.toLocaleString()}</b></div>
+                    <div className="review-grand-total"><span>Grand Total</span><strong>Rs. {grandTotal.toLocaleString()}</strong></div>
+                    <small className="checkout-total-note">Rs. 280 delivery charges are automatically included in your total.</small>
                   </div>
 
                   <button type="button" className="checkout-next-button" onClick={() => setCheckoutStep(2)}>
@@ -2371,7 +2698,7 @@ function Home() {
 
                   <div className="checkout-form premium-checkout-form">
                     <label className="checkout-field"><span className="checkout-field-icon">♙</span><div><small>Full name</small><input type="text" placeholder="Enter customer name" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} /></div></label>
-                    <label className="checkout-field"><span className="checkout-field-icon">☎</span><div><small>Phone number</small><input type="tel" placeholder="03XX XXXXXXX" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} /></div></label>
+                    <label className="checkout-field"><span className="checkout-field-icon">☎</span><div><small>Phone number</small><input type="tel" inputMode="tel" autoComplete="tel" placeholder="03XX XXXXXXX" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} /></div></label>
                     <label className="checkout-field checkout-address-field"><span className="checkout-field-icon">⌖</span><div><small>Complete delivery address</small><textarea placeholder="House, street, area and city" value={customer.address} onChange={(e) => setCustomer({ ...customer, address: e.target.value })}></textarea></div></label>
                     <div className="cart-trust-card"><span>✓</span><div><strong>Private & secure order</strong><p>Your details are only included in your WhatsApp order message.</p></div></div>
                   </div>
@@ -2382,6 +2709,11 @@ function Home() {
                       window.setTimeout(() => setNotice(""), 2200);
                       return;
                     }
+                    if (!isValidPakistanMobile(customer.phone)) {
+                      setNotice("Please enter a valid Pakistani mobile number");
+                      window.setTimeout(() => setNotice(""), 2400);
+                      return;
+                    }
                     setCheckoutStep(3);
                   }}>Review & Choose WhatsApp <span>→</span></button>
                 </section>
@@ -2390,15 +2722,62 @@ function Home() {
               {checkoutStep === 3 && (
                 <section className="checkout-step whatsapp-final-step">
                   <button type="button" className="checkout-back-button" onClick={() => setCheckoutStep(2)}>← Edit delivery details</button>
-                  <div className="final-order-card">
-                    <span>ORDER READY</span><h4>Your ORGAVERA order is complete</h4>
-                    <p>{customer.name} · {customer.phone}</p><small>{customer.address}</small>
-                    <div><em>Total</em><strong>Rs. {cartTotal}</strong></div>
+                  <div className="final-order-card final-order-bill">
+                    <div className="final-bill-brand">
+                      <div className="final-bill-brand-mark">
+                        <img src="/orgavera-logo.png" alt="ORGAVERA" />
+                      </div>
+                      <div className="final-bill-brand-copy">
+                        <span>ORGAVERA</span>
+                        <small>PURE · NATURAL · ORGANIC</small>
+                      </div>
+                      <div className="final-bill-badge">ORDER BILL</div>
+                    </div>
+
+                    <div className="final-bill-title">
+                      <span>READY TO SHARE ON WHATSAPP</span>
+                      <h4>Your order summary</h4>
+                    </div>
+
+                    <div className="final-bill-customer">
+                      <div>
+                        <small>CUSTOMER</small>
+                        <strong>{customer.name}</strong>
+                      </div>
+                      <div>
+                        <small>PHONE</small>
+                        <strong>{customer.phone}</strong>
+                      </div>
+                      <div className="final-bill-address">
+                        <small>DELIVERY ADDRESS</small>
+                        <strong>{customer.address}</strong>
+                      </div>
+                    </div>
+
+                    <div className="final-bill-products">
+                      {cart.map((item, index) => {
+                        const unit = Number(item.unitPrice || getNumericPrice(item.price));
+                        const qty = Number(item.quantity || 1);
+                        return (
+                          <article key={item.id}>
+                            <b>{index + 1}. {item.name}{item.variantLabel ? ` · ${item.variantLabel}` : ""}</b>
+                            <span>{qty} × Rs. {unit.toLocaleString()}</span>
+                            <strong>Rs. {(unit * qty).toLocaleString()}</strong>
+                          </article>
+                        );
+                      })}
+                    </div>
+
+                    <div className="final-bill-totals">
+                      <div><em>Products subtotal</em><strong>Rs. {cartTotal.toLocaleString()}</strong></div>
+                      <div><em>Delivery charges</em><strong>Rs. {deliveryCharge.toLocaleString()}</strong></div>
+                      <div className="final-bill-grand-total"><em>Grand Total</em><strong>Rs. {grandTotal.toLocaleString()}</strong></div>
+                    </div>
                   </div>
-                  <p className="whatsapp-order-note">Choose either ORGAVERA number below. Your complete order summary will open directly in WhatsApp for confirmation.</p>
+                  <p className="whatsapp-order-note">Your complete itemized bill — including Rs. 280 delivery charges and the grand total — will open automatically in WhatsApp. Just tap Send.</p>
                   <div className="compact-whatsapp-options">
-                    <button type="button" className="whatsapp-checkout" onClick={() => placeWhatsAppOrder("923709301194")}><span className="whatsapp-button-icon">◉</span><span><b>Order on WhatsApp</b><small>+92 370 9301194</small></span><em>→</em></button>
-                    <button type="button" className="whatsapp-checkout secondary-whatsapp" onClick={() => placeWhatsAppOrder("923379912484")}><span className="whatsapp-button-icon">◉</span><span><b>Alternative WhatsApp</b><small>+92 337 9912484</small></span><em>→</em></button>
+                    <button type="button" className="whatsapp-checkout" onClick={() => placeWhatsAppOrder(STORE_CONTACT.primaryWhatsApp)}><span className="whatsapp-button-icon">◉</span><span><b>Order on WhatsApp</b><small>+92 370 9301194</small></span><em>→</em></button>
+                    <button type="button" className="whatsapp-checkout secondary-whatsapp" onClick={() => placeWhatsAppOrder(STORE_CONTACT.secondaryWhatsApp)}><span className="whatsapp-button-icon">◉</span><span><b>Alternative WhatsApp</b><small>+92 337 9912484</small></span><em>→</em></button>
                   </div>
                   <div className="cart-footer-promises"><span>❧ Thoughtfully Made</span><span>✦ Direct Confirmation</span><span>⌂ Pakistan Delivery</span></div>
                 </section>
@@ -2412,7 +2791,10 @@ function Home() {
         product={detailProduct}
         onClose={() => setDetailProduct(null)}
         onAddToCart={addToCart}
+        onAskPrice={openPriceInquiry}
       />
+
+      <StoreInfoModal topic={policyTopic} onClose={() => setPolicyTopic("")} />
 
       {/* ================= PREMIUM CONTACT / FOOTER ================= */}
       <footer id="contact" className="premium-footer">
@@ -2563,28 +2945,24 @@ function Home() {
               </a>
             </div>
 
-            <div className="footer-newsletter-premium">
-              <p>STAY CLOSE</p>
-              <h4>Join the ORGAVERA world.</h4>
+            <div className="footer-newsletter-premium footer-help-premium">
+              <p>ORDER HELP</p>
+              <h4>Know what happens before you order.</h4>
               <span>
-                Product launches, restocks and botanical care updates.
+                Check order confirmation, delivery, return/exchange help and privacy information.
               </span>
 
-              <form onSubmit={(event) => event.preventDefault()}>
-                <input
-                  type="email"
-                  placeholder="Your email address"
-                  aria-label="Email address"
-                />
-                <button type="submit" aria-label="Subscribe">↗</button>
-              </form>
-
-              <small>No spam. Just thoughtful updates.</small>
+              <div className="footer-policy-buttons">
+                <button type="button" onClick={() => setPolicyTopic("order")}>Order Process ↗</button>
+                <button type="button" onClick={() => setPolicyTopic("delivery")}>Delivery ↗</button>
+                <button type="button" onClick={() => setPolicyTopic("returns")}>Returns &amp; Exchanges ↗</button>
+                <button type="button" onClick={() => setPolicyTopic("privacy")}>Privacy ↗</button>
+              </div>
             </div>
           </section>
 
           <div className="footer-bottom-premium">
-            <span>© 2026 ORGAVERA. All Rights Reserved.fagzv</span>
+            <span>© 2026 ORGAVERA. All Rights Reserved.</span>
 
             <span>BOTANICAL BEAUTY · THOUGHTFULLY MADE</span>
             <span>RAWALPINDI · PAKISTAN</span>
@@ -2607,6 +2985,8 @@ function CategoryCollectionPage({ categoryKey }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [policyTopic, setPolicyTopic] = useState("");
   const [cart, setCart] = useState(() => {
     try {
       const stored = window.localStorage.getItem(CART_STORAGE_KEY);
@@ -2678,11 +3058,33 @@ function CategoryCollectionPage({ categoryKey }) {
     return variants.find((variant) => String(variant.label || variant.size || "") === selectedLabel) || variants[0];
   };
 
-  const getDisplayPrice = (item) => {
+  const getItemUnitPrice = (item) => {
     const variant = getSelectedVariant(item);
-    const numeric = variant ? getNumericPrice(variant.price) : getNumericPrice(item.price);
+    return variant ? getNumericPrice(variant.price) : getNumericPrice(item.price);
+  };
+
+  const getDisplayPrice = (item) => {
+    const numeric = getItemUnitPrice(item);
     if (numeric > 0) return `Rs. ${numeric.toLocaleString()}`;
-    return String(item.price || "Ask for price");
+    return "Get current price";
+  };
+
+  const openCategoryPriceInquiry = (item, forcedVariantLabel = "") => {
+    const variants = getItemVariants(item);
+    const fallbackVariant = getSelectedVariant(item);
+    const variant =
+      forcedVariantLabel
+        ? variants.find(
+          (variantItem) =>
+            String(variantItem.label || variantItem.size || "").trim() === forcedVariantLabel
+        ) || fallbackVariant
+        : fallbackVariant;
+    const variantLabel = variant ? String(variant.label || variant.size || "").trim() : "";
+    const isClass = categoryKey === "classes";
+    const message = isClass
+      ? `Hi ORGAVERA, I want to book ${item.name}. Please share the current fee, available dates and booking details.`
+      : `Hi ORGAVERA, please share the current price and availability for ${item.name}${variantLabel ? ` (${variantLabel})` : ""}.`;
+    openStoreWhatsApp(message);
   };
 
   const addCategoryItemToCart = (item, forcedVariantLabel = "", amount = 1) => {
@@ -2695,6 +3097,12 @@ function CategoryCollectionPage({ categoryKey }) {
       : getSelectedVariant(item);
     const variantLabel = variant ? String(variant.label || variant.size || "").trim() : "";
     const unitPrice = variant ? getNumericPrice(variant.price) : getNumericPrice(item.price);
+
+    if (unitPrice <= 0) {
+      openCategoryPriceInquiry(item, variantLabel);
+      return;
+    }
+
     const cartId = variantLabel ? `${item.id}::${variantLabel}` : item.id;
     const priceLabel = unitPrice > 0 ? `Rs. ${unitPrice}` : String(item.price || "Ask for price");
 
@@ -2744,41 +3152,77 @@ function CategoryCollectionPage({ categoryKey }) {
     return total + unit * Number(item.quantity || 0);
   }, 0);
   const hasUnpricedItems = cart.some((item) => Number(item.unitPrice || getNumericPrice(item.price)) <= 0);
+  const deliveryCharge = cart.length ? DELIVERY_CHARGE : 0;
+  const grandTotal = cartTotal + deliveryCharge;
 
-  const placeCategoryCartOrder = (number = "923709301194") => {
+  const placeCategoryCartOrder = (number = STORE_CONTACT.primaryWhatsApp) => {
     if (!cart.length) {
       setNotice("Your cart is empty");
       window.setTimeout(() => setNotice(""), 2200);
       return;
     }
 
+    if (!customer.name.trim() || !customer.phone.trim() || !customer.address.trim()) {
+      setNotice("Please enter name, phone and delivery address");
+      window.setTimeout(() => setNotice(""), 2300);
+      return;
+    }
+
+    if (!isValidPakistanMobile(customer.phone)) {
+      setNotice("Please enter a valid Pakistani mobile number");
+      window.setTimeout(() => setNotice(""), 2400);
+      return;
+    }
+
+    if (hasUnpricedItems) {
+      setNotice("Please confirm prices for all products before placing the order");
+      window.setTimeout(() => setNotice(""), 2800);
+      return;
+    }
+
     const productLines = cart.map((item, index) => {
       const unit = Number(item.unitPrice || getNumericPrice(item.price));
       const qty = Number(item.quantity || 1);
-      const variant = item.variantLabel ? ` — ${item.variantLabel}` : "";
-      const priceText = unit > 0
-        ? `Rs. ${unit.toLocaleString()} × ${qty} = Rs. ${(unit * qty).toLocaleString()}`
-        : `Price to be confirmed × ${qty}`;
-      return `${index + 1}. ${item.name}${variant}\n   ${priceText}`;
+      const lineTotal = unit * qty;
+      const variant = item.variantLabel ? ` (${item.variantLabel})` : "";
+
+      return [
+        `${index + 1}. ${item.name}${variant}`,
+        `   Unit Price: Rs. ${unit.toLocaleString()}`,
+        `   Quantity: ${qty}`,
+        `   Line Total: Rs. ${lineTotal.toLocaleString()}`,
+      ].join("\n");
     }).join("\n\n");
 
-    const customerLines = [
-      customer.name.trim() ? `Customer: ${customer.name.trim()}` : "",
-      customer.phone.trim() ? `Phone: ${customer.phone.trim()}` : "",
-      customer.address.trim() ? `Address: ${customer.address.trim()}` : "",
-    ].filter(Boolean).join("\n");
+    const message = [
+      "━━━━━━━━━━━━━━━━━━━━━━━━",
+      "🌿 *ORGAVERA - ORDER BILL*",
+      "━━━━━━━━━━━━━━━━━━━━━━━━",
+      "",
+      "*CUSTOMER DETAILS*",
+      `Name: ${customer.name.trim()}`,
+      `Phone: ${customer.phone.trim()}`,
+      `Address: ${customer.address.trim()}`,
+      "",
+      "────────────────────────",
+      "*ORDER DETAILS*",
+      "────────────────────────",
+      productLines,
+      "",
+      "────────────────────────",
+      "*BILL SUMMARY*",
+      "────────────────────────",
+      `Products Subtotal: Rs. ${cartTotal.toLocaleString()}`,
+      `Delivery Charges: Rs. ${DELIVERY_CHARGE.toLocaleString()}`,
+      `*GRAND TOTAL: Rs. ${grandTotal.toLocaleString()}*`,
+      "────────────────────────",
+      "",
+      "Please confirm product availability and expected delivery time.",
+      "",
+      "Thank you for shopping with ORGAVERA 🌿",
+    ].join("\n");
 
-    const totalLine = cartTotal > 0 ? `Known Total: Rs. ${cartTotal.toLocaleString()}` : "Total: Please confirm prices";
-    const priceNote = hasUnpricedItems ? "\nNote: One or more item prices need confirmation." : "";
-    const message = `🌿 ORGAVERA ORDER\n\n${customerLines ? `${customerLines}\n\n` : ""}ORDER ITEMS\n${productLines}\n\n${totalLine}${priceNote}\n\nPlease confirm availability, delivery charges and final order total.`;
-
-    const encoded = encodeURIComponent(message);
-    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-    const url = mobile
-      ? `https://wa.me/${number}?text=${encoded}`
-      : `https://web.whatsapp.com/send?phone=${number}&text=${encoded}`;
-
-    window.open(url, "_blank", "noopener,noreferrer");
+    openStoreWhatsApp(message, number);
   };
 
   return (
@@ -2800,9 +3244,17 @@ function CategoryCollectionPage({ categoryKey }) {
           <Link to="/#contact">Contact</Link>
         </nav>
 
-        <button type="button" className="navbar-button cart-nav-button category-page-cart-button" onClick={() => setIsCartOpen(true)}>
-          Cart <span className="cart-count">{cartCount}</span>
-        </button>
+        <div className="navbar-actions category-navbar-actions">
+          <MobileShopMenu
+            open={isMobileMenuOpen}
+            onToggle={() => setIsMobileMenuOpen((current) => !current)}
+            onClose={() => setIsMobileMenuOpen(false)}
+            onCart={() => setIsCartOpen(true)}
+          />
+          <button type="button" className="navbar-button cart-nav-button category-page-cart-button" onClick={() => setIsCartOpen(true)}>
+            Cart <span className="cart-count">{cartCount}</span>
+          </button>
+        </div>
       </header>
 
       <main className="premium-collection-main">
@@ -2863,9 +3315,14 @@ function CategoryCollectionPage({ categoryKey }) {
                       type="button"
                       className="premium-card-action"
                       aria-label={`Add ${item.name} to cart`}
-                      onClick={(event) => { event.stopPropagation(); addCategoryItemToCart(item); }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (getItemUnitPrice(item) > 0) addCategoryItemToCart(item);
+                        else openCategoryPriceInquiry(item);
+                      }}
+                      title={getItemUnitPrice(item) > 0 ? "Add to cart" : "Get current price on WhatsApp"}
                     >
-                      +
+                      {getItemUnitPrice(item) > 0 ? "+" : "?"}
                     </button>
                   </div>
 
@@ -2949,8 +3406,19 @@ function CategoryCollectionPage({ categoryKey }) {
 
                     <div className="premium-product-bottom">
                       <strong>{getDisplayPrice(item)}</strong>
-                      <button type="button" className="premium-add-to-cart-button" onClick={() => addCategoryItemToCart(item)}>
-                        {categoryKey === "classes" ? "Add Booking" : "Add to Cart"} →
+                      <button
+                        type="button"
+                        className="premium-add-to-cart-button"
+                        onClick={() => {
+                          if (getItemUnitPrice(item) > 0) addCategoryItemToCart(item);
+                          else openCategoryPriceInquiry(item);
+                        }}
+                      >
+                        {categoryKey === "classes"
+                          ? "Book on WhatsApp"
+                          : getItemUnitPrice(item) > 0
+                            ? "Add to Cart"
+                            : "Get Price"} →
                       </button>
                     </div>
                   </div>
@@ -3026,23 +3494,24 @@ function CategoryCollectionPage({ categoryKey }) {
                 })}
               </div>
 
-              <div className="review-total-card category-cart-total-card">
-                <div><span>Known subtotal</span><b>Rs. {cartTotal.toLocaleString()}</b></div>
-                {hasUnpricedItems && <div><span>Unpriced items</span><b>Confirm on WhatsApp</b></div>}
-                <div><span>Delivery charges</span><b>Confirmed on WhatsApp</b></div>
-                <div className="review-grand-total"><span>Price List Total</span><strong>Rs. {cartTotal.toLocaleString()}</strong></div>
+              <div className="review-total-card category-cart-total-card order-bill-summary-card">
+                <div><span>Products subtotal</span><b>Rs. {cartTotal.toLocaleString()}</b></div>
+                {hasUnpricedItems && <div><span>Unpriced items</span><b>Confirm price first</b></div>}
+                <div><span>Delivery charges</span><b>Rs. {deliveryCharge.toLocaleString()}</b></div>
+                <div className="review-grand-total"><span>Grand Total</span><strong>Rs. {grandTotal.toLocaleString()}</strong></div>
+                <small className="checkout-total-note">Rs. 280 delivery charges are automatically included in your total.</small>
               </div>
 
               <div className="checkout-form premium-checkout-form category-quick-checkout">
-                <label className="checkout-field"><span className="checkout-field-icon">♙</span><div><small>Name (optional)</small><input type="text" placeholder="Customer name" value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} /></div></label>
-                <label className="checkout-field"><span className="checkout-field-icon">☎</span><div><small>Phone (optional)</small><input type="tel" placeholder="03XX XXXXXXX" value={customer.phone} onChange={(event) => setCustomer({ ...customer, phone: event.target.value })} /></div></label>
-                <label className="checkout-field checkout-address-field"><span className="checkout-field-icon">⌖</span><div><small>Address (optional)</small><textarea placeholder="House, street, area and city" value={customer.address} onChange={(event) => setCustomer({ ...customer, address: event.target.value })}></textarea></div></label>
+                <label className="checkout-field"><span className="checkout-field-icon">♙</span><div><small>Full name</small><input type="text" placeholder="Customer name" value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} /></div></label>
+                <label className="checkout-field"><span className="checkout-field-icon">☎</span><div><small>Phone number</small><input type="tel" inputMode="tel" autoComplete="tel" placeholder="03XX XXXXXXX" value={customer.phone} onChange={(event) => setCustomer({ ...customer, phone: event.target.value })} /></div></label>
+                <label className="checkout-field checkout-address-field"><span className="checkout-field-icon">⌖</span><div><small>Delivery address</small><textarea placeholder="House, street, area and city" value={customer.address} onChange={(event) => setCustomer({ ...customer, address: event.target.value })}></textarea></div></label>
               </div>
 
-              <button type="button" className="checkout-next-button category-direct-order-button" onClick={() => placeCategoryCartOrder("923709301194")}>
+              <button type="button" className="checkout-next-button category-direct-order-button" onClick={() => placeCategoryCartOrder(STORE_CONTACT.primaryWhatsApp)}>
                 Place Complete Order on WhatsApp <span>→</span>
               </button>
-              <p className="whatsapp-order-note category-order-note">Your selected products, quantities and full price list will be inserted into the WhatsApp message automatically.</p>
+              <p className="whatsapp-order-note category-order-note">Your complete bill will open in WhatsApp with every product, size, quantity, item total, Rs. 280 delivery charges and the final grand total. Just tap Send.</p>
             </section>
           )}
         </div>
@@ -3052,14 +3521,22 @@ function CategoryCollectionPage({ categoryKey }) {
         product={detailProduct}
         onClose={() => setDetailProduct(null)}
         onAddToCart={addCategoryItemToCart}
+        onAskPrice={openCategoryPriceInquiry}
       />
+
+      <StoreInfoModal topic={policyTopic} onClose={() => setPolicyTopic("")} />
 
       <footer className="premium-category-footer">
         <Link to="/" className="premium-footer-brand">
           <img src="/orgavera-logo.png" alt="ORGAVERA" />
           <div><strong>ORGAVERA</strong><span>Pure · Natural · Organic</span></div>
         </Link>
-        <span>BOTANICAL BEAUTY · THOUGHTFULLY MADE</span>
+        <div className="category-footer-policy-links">
+          <button type="button" onClick={() => setPolicyTopic("order")}>Order Process</button>
+          <button type="button" onClick={() => setPolicyTopic("delivery")}>Delivery</button>
+          <button type="button" onClick={() => setPolicyTopic("returns")}>Returns</button>
+          <button type="button" onClick={() => setPolicyTopic("privacy")}>Privacy</button>
+        </div>
         <span>RAWALPINDI · PAKISTAN</span>
       </footer>
     </div>
@@ -3068,11 +3545,21 @@ function CategoryCollectionPage({ categoryKey }) {
 
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
 
   useEffect(() => {
+    if (hash) {
+      const timer = window.setTimeout(() => {
+        const target = document.getElementById(hash.replace("#", ""));
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+        else window.scrollTo(0, 0);
+      }, 60);
+      return () => window.clearTimeout(timer);
+    }
+
     window.scrollTo(0, 0);
-  }, [pathname]);
+    return undefined;
+  }, [pathname, hash]);
 
   return null;
 }
