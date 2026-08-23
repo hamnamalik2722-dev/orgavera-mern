@@ -266,6 +266,66 @@ const categoryPageConfig = {
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+// Keep the last successfully loaded admin catalog in this browser.
+// This prevents custom Best Seller Deals / category products from disappearing
+// whenever the backend is temporarily asleep, offline, or unavailable locally.
+const CATALOG_CACHE_KEY = "orgaveraCatalogCacheV1";
+
+const CATALOG_SECTIONS = ["bestsellers", "skincare", "haircare", "soaps", "ingredients", "classes"];
+
+const normalizeCatalogShape = (catalog, fallback = defaultAdminCatalog) => {
+  const source = catalog && typeof catalog === "object" ? catalog : {};
+  const safeFallback = fallback && typeof fallback === "object" ? fallback : {};
+
+  return CATALOG_SECTIONS.reduce((result, key) => {
+    result[key] = Array.isArray(source[key])
+      ? source[key]
+      : Array.isArray(safeFallback[key])
+        ? safeFallback[key]
+        : [];
+    return result;
+  }, {});
+};
+const LEGACY_CATALOG_KEYS = [
+  CATALOG_CACHE_KEY,
+  "orgaveraAdminCatalog",
+  "orgaveraCatalog",
+  "adminCatalog",
+  "catalog",
+];
+
+const hasCatalogItems = (catalog) =>
+  Boolean(
+    catalog &&
+    typeof catalog === "object" &&
+    ["bestsellers", "skincare", "haircare", "soaps", "ingredients", "classes"].some(
+      (key) => Array.isArray(catalog[key]) && catalog[key].length > 0
+    )
+  );
+
+const readCachedCatalog = () => {
+  try {
+    for (const key of LEGACY_CATALOG_KEYS) {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (hasCatalogItems(parsed)) return normalizeCatalogShape(parsed);
+    }
+  } catch (error) {
+    console.warn("Could not read cached ORGAVERA catalog:", error);
+  }
+  return null;
+};
+
+const saveCachedCatalog = (catalog) => {
+  if (!hasCatalogItems(catalog)) return;
+  try {
+    window.localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(normalizeCatalogShape(catalog)));
+  } catch (error) {
+    console.warn("Could not cache ORGAVERA catalog:", error);
+  }
+};
+
 const API_CATEGORY_KEYS = {
   "best-sellers": "bestsellers",
   "best sellers": "bestsellers",
@@ -1153,10 +1213,11 @@ function Home() {
   const getNumericPrice = (price) => Number(String(price).replace(/[^0-9]/g, "")) || 0;
 
   // Load the live product catalog from the MongoDB-backed API.
-  const [adminCatalog, setAdminCatalog] = useState(defaultAdminCatalog);
+  const [adminCatalog, setAdminCatalog] = useState(() => normalizeCatalogShape(readCachedCatalog() || defaultAdminCatalog));
 
-  const bestSellerDeals = adminCatalog.bestsellers.length
-    ? adminCatalog.bestsellers.slice(0, 4).map((item) => {
+  const bestSellerItems = Array.isArray(adminCatalog?.bestsellers) ? adminCatalog.bestsellers : [];
+  const bestSellerDeals = bestSellerItems.length
+    ? bestSellerItems.slice(0, 4).map((item) => {
       const currentPrice = getNumericPrice(item.price);
       const originalPrice = getNumericPrice(item.oldPrice);
       const autoDiscount =
@@ -1179,9 +1240,14 @@ function Home() {
     const refreshCatalog = async () => {
       try {
         const liveCatalog = await fetchCatalogFromApi();
-        if (active) setAdminCatalog(liveCatalog);
+        if (active && hasCatalogItems(liveCatalog)) {
+          const safeCatalog = normalizeCatalogShape(liveCatalog, adminCatalog);
+          setAdminCatalog(safeCatalog);
+          saveCachedCatalog(safeCatalog);
+        }
       } catch (error) {
-        console.error("Could not load MongoDB catalog:", error);
+        // Keep cached/admin products visible instead of replacing them with defaults.
+        console.warn("Could not load MongoDB catalog; using saved catalog:", error);
       }
     };
 
@@ -1511,90 +1577,6 @@ function Home() {
           </div>
         </section>
 
-        {/* ================= SHOP BY CATEGORY ================= */}
-
-        <section className="home-category-showcase home-category-luxury" id="shop-categories" aria-label="Shop ORGAVERA by category">
-          <div className="home-category-shell">
-            <div className="home-category-section-head reveal show">
-              <p>CURATED ORGAVERA COLLECTIONS</p>
-              <div className="home-category-title-row">
-                <span></span><h3>Shop by Category</h3><span></span>
-              </div>
-              <small>Choose a category and explore products made for your routine.</small>
-            </div>
-
-            <div className="home-category-grid home-category-grid-five" id="category-grid">
-              <Link to="/collection/skin-care" className="home-category-card-premium">
-                <div className="home-category-card-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11Z" /><path d="M9 10h6M12 7v6" /></svg>
-                </div>
-                <div className="home-category-card-body">
-                  <h3>Skin Care</h3>
-                  <p>Nourish, protect &amp; glow with our natural skincare.</p>
-                  <span className="home-category-card-count">{adminCatalog.skincare.length || "Explore"} products</span>
-                  <span className="home-category-card-button">Shop Now <b>→</b></span>
-                </div>
-              </Link>
-
-              <Link to="/collection/hair-care" className="home-category-card-premium">
-                <div className="home-category-card-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M8 4c5 0 8 4 8 8 0 4-2 7-5 8" /><path d="M10 4c-2 3-2 6 0 9 1 2 1 4 0 7" /><path d="M6 5c-1 4 0 7 3 9" /></svg>
-                </div>
-                <div className="home-category-card-body">
-                  <h3>Hair Care</h3>
-                  <p>Strengthen, repair &amp; refresh with herbal care.</p>
-                  <span className="home-category-card-count">{adminCatalog.haircare.length || "Explore"} products</span>
-                  <span className="home-category-card-button">Shop Now <b>→</b></span>
-                </div>
-              </Link>
-
-              <Link to="/collection/soaps" className="home-category-card-premium">
-                <div className="home-category-card-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M5 15c3-8 8-10 14-10-1 6-4 11-10 12" /><path d="M8 18c3-3 6-6 10-8" /></svg>
-                </div>
-                <div className="home-category-card-body">
-                  <h3>Artisan Soaps</h3>
-                  <p>Handcrafted soaps made with pure botanical ingredients.</p>
-                  <span className="home-category-card-count">{adminCatalog.soaps.length || "Explore"} products</span>
-                  <span className="home-category-card-button">Shop Now <b>→</b></span>
-                </div>
-              </Link>
-
-              <Link to="/collection/cosmetic-ingredients" className="home-category-card-premium">
-                <div className="home-category-card-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3" /><path d="M8 15h8" /></svg>
-                </div>
-                <div className="home-category-card-body">
-                  <h3>Cosmetic Ingredients</h3>
-                  <p>High quality ingredients for your formulations.</p>
-                  <span className="home-category-card-count">{adminCatalog.ingredients.length || "Explore"} products</span>
-                  <span className="home-category-card-button">Shop Now <b>→</b></span>
-                </div>
-              </Link>
-
-              <Link to="/classes" className="home-category-card-premium">
-                <div className="home-category-card-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="m3 10 9-5 9 5-9 5-9-5Z" /><path d="M7 12v5c3 2 7 2 10 0v-5" /></svg>
-                </div>
-                <div className="home-category-card-body">
-                  <h3>Book a Class</h3>
-                  <p>Learn, create &amp; grow with our formulation classes.</p>
-                  <span className="home-category-card-count">{adminCatalog.classes.length || "Explore"} classes</span>
-                  <span className="home-category-card-button">View Classes <b>→</b></span>
-                </div>
-              </Link>
-            </div>
-
-            <div className="home-category-trust-strip reveal show">
-              <div><span>❧</span><p><b>100% Natural</b><small>Pure &amp; Safe</small></p></div>
-              <div><span>♨</span><p><b>Handcrafted</b><small>Made with Care</small></p></div>
-              <div><span>⚗</span><p><b>Chemical Free</b><small>No Harmful Additives</small></p></div>
-              <div><span>♧</span><p><b>Ethical Sourcing</b><small>Responsible &amp; Sustainable</small></p></div>
-              <div><span>♡</span><p><b>Cruelty Free</b><small>Not Tested on Animals</small></p></div>
-            </div>
-          </div>
-        </section>
-
         {/* ================= TOP SELLERS ================= */}
 
         <section className="top-sellers-section" id="top-sellers">
@@ -1672,6 +1654,89 @@ function Home() {
           </div>
         </section>
 
+        {/* ================= SHOP BY CATEGORY ================= */}
+
+        <section className="home-category-showcase home-category-luxury" id="shop-categories" aria-label="Shop ORGAVERA by category">
+          <div className="home-category-shell">
+            <div className="home-category-section-head reveal show">
+              <p>CURATED ORGAVERA COLLECTIONS</p>
+              <div className="home-category-title-row">
+                <span></span><h3>Shop by Category</h3><span></span>
+              </div>
+              <small>Choose a category and explore products made for your routine.</small>
+            </div>
+
+            <div className="home-category-grid home-category-grid-five" id="category-grid">
+              <Link to="/collection/skin-care" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 21s7-4.35 7-11a7 7 0 1 0-14 0c0 6.65 7 11 7 11Z" /><path d="M9 10h6M12 7v6" /></svg>
+                </div>
+                <div className="home-category-card-body">
+                  <h3>Skin Care</h3>
+                  <p>Nourish, protect &amp; glow with our natural skincare.</p>
+                  <span className="home-category-card-count">{(adminCatalog?.skincare?.length || 0) || "Explore"} products</span>
+                  <span className="home-category-card-button">Shop Now <b>→</b></span>
+                </div>
+              </Link>
+
+              <Link to="/collection/hair-care" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M8 4c5 0 8 4 8 8 0 4-2 7-5 8" /><path d="M10 4c-2 3-2 6 0 9 1 2 1 4 0 7" /><path d="M6 5c-1 4 0 7 3 9" /></svg>
+                </div>
+                <div className="home-category-card-body">
+                  <h3>Hair Care</h3>
+                  <p>Strengthen, repair &amp; refresh with herbal care.</p>
+                  <span className="home-category-card-count">{(adminCatalog?.haircare?.length || 0) || "Explore"} products</span>
+                  <span className="home-category-card-button">Shop Now <b>→</b></span>
+                </div>
+              </Link>
+
+              <Link to="/collection/soaps" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M5 15c3-8 8-10 14-10-1 6-4 11-10 12" /><path d="M8 18c3-3 6-6 10-8" /></svg>
+                </div>
+                <div className="home-category-card-body">
+                  <h3>Artisan Soaps</h3>
+                  <p>Handcrafted soaps made with pure botanical ingredients.</p>
+                  <span className="home-category-card-count">{(adminCatalog?.soaps?.length || 0) || "Explore"} products</span>
+                  <span className="home-category-card-button">Shop Now <b>→</b></span>
+                </div>
+              </Link>
+
+              <Link to="/collection/cosmetic-ingredients" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3" /><path d="M8 15h8" /></svg>
+                </div>
+                <div className="home-category-card-body">
+                  <h3>Cosmetic Ingredients</h3>
+                  <p>High quality ingredients for your formulations.</p>
+                  <span className="home-category-card-count">{(adminCatalog?.ingredients?.length || 0) || "Explore"} products</span>
+                  <span className="home-category-card-button">Shop Now <b>→</b></span>
+                </div>
+              </Link>
+
+              <Link to="/classes" className="home-category-card-premium">
+                <div className="home-category-card-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m3 10 9-5 9 5-9 5-9-5Z" /><path d="M7 12v5c3 2 7 2 10 0v-5" /></svg>
+                </div>
+                <div className="home-category-card-body">
+                  <h3>Book a Class</h3>
+                  <p>Learn, create &amp; grow with our formulation classes.</p>
+                  <span className="home-category-card-count">{(adminCatalog?.classes?.length || 0) || "Explore"} classes</span>
+                  <span className="home-category-card-button">View Classes <b>→</b></span>
+                </div>
+              </Link>
+            </div>
+
+            <div className="home-category-trust-strip reveal show">
+              <div><span>❧</span><p><b>100% Natural</b><small>Pure &amp; Safe</small></p></div>
+              <div><span>♨</span><p><b>Handcrafted</b><small>Made with Care</small></p></div>
+              <div><span>⚗</span><p><b>Chemical Free</b><small>No Harmful Additives</small></p></div>
+              <div><span>♧</span><p><b>Ethical Sourcing</b><small>Responsible &amp; Sustainable</small></p></div>
+              <div><span>♡</span><p><b>Cruelty Free</b><small>Not Tested on Animals</small></p></div>
+            </div>
+          </div>
+        </section>
 
         {/* ================= MOVING TEXT ================= */}
 
@@ -1799,14 +1864,14 @@ function Home() {
             <div className="products-heading-side">
               <span className="products-heading-side-label">EXPLORE BY CATEGORY</span>
               <div className="products-heading-category-links">
-                <a href="#skin-care">Skin Care <b>↘</b></a>
-                <a href="#hair-care">Hair Care <b>↘</b></a>
-                <a href="#soaps-products">Soaps <b>↘</b></a>
-                <a href="#ingredients-products">Ingredients <b>↘</b></a>
+                <Link to="/collection/skin-care">Skin Care <b>↗</b></Link>
+                <Link to="/collection/hair-care">Hair Care <b>↗</b></Link>
+                <Link to="/collection/soaps">Soaps <b>↗</b></Link>
+                <Link to="/collection/cosmetic-ingredients">Ingredients <b>↗</b></Link>
               </div>
-              <a href="#skin-care" className="products-heading-explore">
-                Start exploring <span>↘</span>
-              </a>
+              <Link to="/collection/skin-care" className="products-heading-explore">
+                Start exploring <span>↗</span>
+              </Link>
             </div>
           </div>
 
@@ -1823,7 +1888,7 @@ function Home() {
             </div>
 
             <div className="collection-scroll collection-scroll-preview">
-              {adminCatalog.skincare.slice(0, 4).map((product) => (
+              {(adminCatalog?.skincare || []).slice(0, 4).map((product) => (
                 <article className="collection-card" key={product.id}>
                   <div className="collection-image-wrap" onClick={() => setDetailProduct(product)} style={{ cursor: "pointer" }}>
                     <img
@@ -1878,7 +1943,7 @@ function Home() {
             </div>
 
             <div className="collection-scroll collection-scroll-hair collection-scroll-preview">
-              {adminCatalog.haircare.slice(0, 4).map((product) => (
+              {(adminCatalog?.haircare || []).slice(0, 4).map((product) => (
                 <article className="collection-card" key={product.id}>
                   <div className="collection-image-wrap" onClick={() => setDetailProduct(product)} style={{ cursor: "pointer" }}>
                     <img
@@ -1927,21 +1992,21 @@ function Home() {
               id: "soaps-products",
               number: "03",
               title: "Artisan Soaps",
-              items: adminCatalog.soaps,
+              items: adminCatalog?.soaps || [],
               moreTo: "/collection/soaps",
             },
             {
               id: "ingredients-products",
               number: "04",
               title: "Cosmetic Ingredients",
-              items: adminCatalog.ingredients,
+              items: adminCatalog?.ingredients || [],
               moreTo: "/collection/cosmetic-ingredients",
             },
             {
               id: "classes-products",
               number: "05",
               title: "Book a Class",
-              items: adminCatalog.classes,
+              items: adminCatalog?.classes || [],
               moreTo: "/classes",
             },
           ].map((category) => (
@@ -2534,7 +2599,7 @@ function Home() {
 function CategoryCollectionPage({ categoryKey }) {
   const config = categoryPageConfig[categoryKey];
   const CART_STORAGE_KEY = "orgaveraCart";
-  const [catalog, setCatalog] = useState(defaultAdminCatalog);
+  const [catalog, setCatalog] = useState(() => normalizeCatalogShape(readCachedCatalog() || defaultAdminCatalog));
   const [query, setQuery] = useState("");
   const [sortOrder, setSortOrder] = useState("featured");
   const [selectedVariants, setSelectedVariants] = useState({});
@@ -2573,9 +2638,13 @@ function CategoryCollectionPage({ categoryKey }) {
     const refreshCatalog = async () => {
       try {
         const liveCatalog = await fetchCatalogFromApi();
-        if (active) setCatalog(liveCatalog);
+        if (active && hasCatalogItems(liveCatalog)) {
+          const safeCatalog = normalizeCatalogShape(liveCatalog, catalog);
+          setCatalog(safeCatalog);
+          saveCachedCatalog(safeCatalog);
+        }
       } catch (error) {
-        console.error("Could not load MongoDB category catalog:", error);
+        console.warn("Could not load MongoDB category catalog; using saved catalog:", error);
       }
     };
 
@@ -2585,7 +2654,7 @@ function CategoryCollectionPage({ categoryKey }) {
 
   if (!config) return <Navigate to="/" replace />;
 
-  const items = catalog[config.storageKey] || [];
+  const items = Array.isArray(catalog?.[config.storageKey]) ? catalog[config.storageKey] : [];
   const filteredItems = items
     .filter((item) => [item.name, item.type, item.description].join(" ").toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => {
